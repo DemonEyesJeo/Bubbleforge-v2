@@ -46,6 +46,7 @@ function sampleProject() {
       { id: alexId, name: 'Alex', color: '#2979FF', side: 'right', avatar: null },
       { id: mayaId, name: 'Maya', color: '#00BFA5', side: 'left',  avatar: null },
     ],
+    groups: [],
     scenes: [
       {
         id: sceneId,
@@ -128,7 +129,7 @@ class Store {
 
   createProject(name = 'New Story') {
     this._snapshot()
-    const p = { ...sampleProject(), id: uuid(), name, created_at: now(), updated_at: now(), scenes: [], actors: [] }
+    const p = { ...sampleProject(), id: uuid(), name, created_at: now(), updated_at: now(), scenes: [], actors: [], groups: [] }
     const firstScene = { id: uuid(), name: 'Scene 1', quote: '', messages: [] }
     p.scenes = [firstScene]
     p.active_scene_id = firstScene.id
@@ -247,6 +248,18 @@ class Store {
   }
 
   // ── Actors ───────────────────────────────────
+  addGroup(projectId, name, color = '#888888') {
+    const p = this.getProject(projectId)
+    if (!p) return null
+    this._snapshot()
+    const group = { id: uuid(), name, color }
+    p.groups = [...(p.groups || []), group]
+    p.updated_at = now()
+    this._save()
+    this._emit('project-changed', projectId)
+    return group
+  }
+
   addActor(projectId, name, color, side = 'left', avatar = null) {
     const p = this.getProject(projectId)
     if (!p) return null

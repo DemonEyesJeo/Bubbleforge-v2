@@ -459,6 +459,45 @@ body {
   background: var(--accent-g);
 }
 
+.groups-sheet {
+  max-height: 82%;
+}
+.groups-list {
+  margin-top: 12px;
+  padding: 0 4px;
+  max-height: 280px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.group-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 12px;
+  border-radius: 14px;
+  background: var(--s1);
+  border: 1px solid var(--border);
+}
+.group-name { color: var(--t1); font-size: 14px; font-weight: 600; }
+.group-sub { color: var(--t3); font-size: 12px; margin-top: 2px; }
+.group-pill {
+  padding: 6px 8px;
+  border-radius: 999px;
+  background: var(--s2);
+  color: var(--t3);
+  font-size: 11px;
+  font-weight: 600;
+}
+.groups-empty {
+  padding: 12px 2px;
+  color: var(--t3);
+  font-size: 13px;
+  text-align: center;
+}
+
 /* ══════════════════════════════════════
    CONVERSATION SCREEN
    ══════════════════════════════════════ */

@@ -120,7 +120,7 @@ export class HomeScreen {
     this._el.querySelectorAll('.home-nav-item').forEach(item => {
       item.addEventListener('click', () => this._switchTab(item.dataset.tab))
     })
-    this._el.querySelector('#groupsBtn')?.addEventListener('click', () => this._snack('Groups is not wired yet in v2.'))
+    this._el.querySelector('#groupsBtn')?.addEventListener('click', () => this._openGroupsSheet())
     this._el.querySelector('#sortActorsBtn')?.addEventListener('click', () => {
       this._characterSort = this._characterSort === 'name' ? 'project' : 'name'
       const btn = this._el.querySelector('#sortActorsBtn')
@@ -206,6 +206,82 @@ export class HomeScreen {
     sheet.classList.remove('visible')
     this._createOverlay = null
     this._createSheet = null
+    setTimeout(() => {
+      overlay.remove()
+      sheet.remove()
+    }, 220)
+  }
+
+  _openGroupsSheet() {
+    if (this._groupsOverlay) return
+
+    const overlay = document.createElement('div')
+    overlay.className = 'new-project-overlay'
+
+    const sheet = document.createElement('div')
+    sheet.className = 'new-project-sheet groups-sheet'
+    const projects = store.getProjects()
+    const groups = projects.flatMap(project => (project.groups || []).map(group => ({ project, group })))
+    sheet.innerHTML = `
+      <div class="new-project-handle"></div>
+      <div class="new-project-title">Groups</div>
+      <div class="new-project-sub">Organize actors into named groups.</div>
+      <input id="newGroupName" class="new-project-input" type="text" maxlength="80" placeholder="New group name" />
+      <div class="new-project-actions">
+        <button id="cancelGroupBtn" class="new-project-btn ghost">Close</button>
+        <button id="createGroupBtn" class="new-project-btn primary">Add Group</button>
+      </div>
+      <div class="groups-list" id="groupsList">
+        ${groups.length ? groups.map(({ project, group }) => `
+          <div class="group-row">
+            <div>
+              <div class="group-name">${group.name}</div>
+              <div class="group-sub">${project.name}</div>
+            </div>
+            <div class="group-pill">${group.color}</div>
+          </div>`).join('') : '<div class="groups-empty">No groups yet.</div>'}
+      </div>
+    `
+
+    this._groupsOverlay = overlay
+    this._groupsSheet = sheet
+    this._el.appendChild(overlay)
+    this._el.appendChild(sheet)
+
+    const close = () => this._closeGroupsSheet()
+    const create = () => {
+      const input = sheet.querySelector('#newGroupName')
+      const name = (input?.value || '').trim()
+      const project = store.getProjects()[0]
+      if (!project) return this._snack('Create a story first.')
+      if (!name) return input?.focus()
+      store.addGroup(project.id, name)
+      this._closeGroupsSheet()
+    }
+
+    overlay.addEventListener('click', close)
+    sheet.querySelector('#cancelGroupBtn').addEventListener('click', close)
+    sheet.querySelector('#createGroupBtn').addEventListener('click', create)
+    sheet.querySelector('#newGroupName').addEventListener('keydown', e => {
+      if (e.key === 'Enter') create()
+      if (e.key === 'Escape') close()
+    })
+
+    requestAnimationFrame(() => {
+      overlay.classList.add('visible')
+      sheet.classList.add('visible')
+      sheet.querySelector('#newGroupName')?.focus()
+    })
+  }
+
+  _closeGroupsSheet() {
+    if (!this._groupsOverlay || !this._groupsSheet) return
+    const overlay = this._groupsOverlay
+    const sheet = this._groupsSheet
+    overlay.classList.remove('visible')
+    sheet.classList.remove('visible')
+    this._groupsOverlay = null
+    this._groupsSheet = null
     setTimeout(() => {
       overlay.remove()
       sheet.remove()
