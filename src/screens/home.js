@@ -296,14 +296,19 @@ export class HomeScreen {
     sheet.className = 'new-project-sheet groups-sheet'
     const projects = store.getProjects()
     const groups = projects.flatMap(project => (project.groups || []).map(group => ({ project, group })))
+    const defaultProjectId = projects[0]?.id || ''
     sheet.innerHTML = `
       <div class="new-project-handle"></div>
       <div class="new-project-title">Groups</div>
       <div class="new-project-sub">Organize actors into named groups.</div>
       <input id="newGroupName" class="new-project-input" type="text" maxlength="80" placeholder="New group name" />
+      <select id="groupProjectSelect" class="new-project-input" ${projects.length ? '' : 'disabled'}>
+        ${projects.map(project => `<option value="${project.id}" ${project.id === defaultProjectId ? 'selected' : ''}>${project.name}</option>`).join('')}
+      </select>
+      <input id="newGroupColor" class="new-project-input" type="color" value="#888888" aria-label="Group color" />
       <div class="new-project-actions">
         <button id="cancelGroupBtn" class="new-project-btn ghost">Close</button>
-        <button id="createGroupBtn" class="new-project-btn primary">Add Group</button>
+        <button id="createGroupBtn" class="new-project-btn primary" ${projects.length ? '' : 'disabled'}>Add Group</button>
       </div>
       <div class="groups-list" id="groupsList">
         ${groups.length ? groups.map(({ project, group }) => `
@@ -325,11 +330,14 @@ export class HomeScreen {
     const close = () => this._closeGroupsSheet()
     const create = () => {
       const input = sheet.querySelector('#newGroupName')
+      const projectSelect = sheet.querySelector('#groupProjectSelect')
+      const colorInput = sheet.querySelector('#newGroupColor')
       const name = (input?.value || '').trim()
-      const project = store.getProjects()[0]
+      const project = store.getProject(projectSelect?.value || '')
+      const color = (colorInput?.value || '#888888').trim() || '#888888'
       if (!project) return this._snack('Create a story first.')
       if (!name) return input?.focus()
-      store.addGroup(project.id, name)
+      store.addGroup(project.id, name, color)
       this._closeGroupsSheet()
     }
 
