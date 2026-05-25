@@ -463,7 +463,11 @@ export class ConversationScreen {
   }
 
   _toggleAudioPill() {
-    this._audioToolsOpen = !this._audioToolsOpen
+    this._setAudioPillOpen(!this._audioToolsOpen)
+  }
+
+  _setAudioPillOpen(isOpen) {
+    this._audioToolsOpen = Boolean(isOpen)
     const pill = this._el.querySelector('#audioPill')
     const sub = this._el.querySelector('#audioPillSub')
     if (pill) pill.classList.toggle('open', this._audioToolsOpen)
@@ -554,7 +558,7 @@ export class ConversationScreen {
     reader.onload = () => {
       this._composePendingMedia = String(reader.result || '')
       this._syncComposeMediaPreview()
-      this._toggleAudioPill()
+      this._setAudioPillOpen(true)
     }
     reader.readAsDataURL(file)
     input.value = ''
@@ -567,7 +571,7 @@ export class ConversationScreen {
     reader.onload = () => {
       this._composePendingAudio = String(reader.result || '')
       this._syncComposeMediaPreview()
-      this._toggleAudioPill()
+      this._setAudioPillOpen(true)
     }
     reader.readAsDataURL(file)
     input.value = ''
