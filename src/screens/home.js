@@ -277,17 +277,6 @@ export class HomeScreen {
     }, 220)
   }
 
-  _openSupportEmail() {
-    const subject = encodeURIComponent('Bubbleforge support')
-    const body = encodeURIComponent('Hi Bubbleforge team,\n\n')
-    const mailto = `mailto:${this._supportEmail}?subject=${subject}&body=${body}`
-    try {
-      window.location.href = mailto
-    } catch {
-      this._snack(`Contact: ${this._supportEmail}`)
-    }
-  }
-
   _openExternal(url, fallbackLabel) {
     try {
       const opened = window.open(url, '_blank', 'noopener,noreferrer')
