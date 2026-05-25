@@ -149,6 +149,7 @@ export class HomeScreen {
   destroy() {
     this._closeCreateProjectSheet()
     this._closeCreditsSheet()
+    this._closeProSheet()
     store.off('projects-changed', this._onChange)
   }
 
@@ -460,7 +461,7 @@ export class HomeScreen {
         } else if (title === 'Credits & licenses') {
           this._openCreditsSheet()
         } else if (title === 'Upgrade to PRO') {
-          this._snack('PRO upgrade is not wired yet in v2.')
+          this._openProSheet()
         }
       })
     })

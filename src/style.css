@@ -526,6 +526,25 @@ body {
   line-height: 1.45;
 }
 
+.pro-sheet {
+  max-height: 78%;
+}
+.pro-list {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pro-item {
+  padding: 12px 13px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--s1);
+  color: var(--t1);
+  font-size: 13px;
+  font-weight: 600;
+}
+
 /* ══════════════════════════════════════
    CONVERSATION SCREEN
    ══════════════════════════════════════ */
