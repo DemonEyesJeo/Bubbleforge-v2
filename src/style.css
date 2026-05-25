@@ -691,6 +691,30 @@ body {
   color: var(--t3);
   font-size: 12px;
 }
+.audio-pill-preview {
+  margin-top: 8px;
+}
+.audio-pill-thumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.audio-pill-thumb img {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.audio-pill-thumb span {
+  color: var(--t2);
+  font-size: 12px;
+  font-weight: 500;
+}
 .audio-pill-track {
   margin-top: 8px;
   height: 6px;
@@ -744,6 +768,12 @@ body {
 .emoji-item:hover { background: var(--s2); }
 .emoji-item.active { background: rgba(41,121,255,0.16); }
 .bubble-text { white-space: pre-wrap; }
+.bubble-media {
+  display: block;
+  max-width: 100%;
+  border-radius: 12px;
+  margin-bottom: 6px;
+}
 .bubble-reaction {
   margin-top: 6px;
   display: inline-flex;

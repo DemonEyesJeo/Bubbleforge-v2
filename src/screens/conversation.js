@@ -12,6 +12,7 @@ export class ConversationScreen {
     this._hub = null
     this._exportRail = null
     this._audioToolsOpen = false
+    this._composePendingMedia = ''
     this._bubbleLongPressTimer = null
     this._bubbleLongPressSuppressedMsgId = null
     this._onChange = () => this._refresh()
@@ -50,6 +51,7 @@ export class ConversationScreen {
           <div class="audio-pill-timeline">
             <div class="audio-pill-title">Audio tools</div>
             <div class="audio-pill-sub" id="audioPillSub">Hidden while typing</div>
+            <div class="audio-pill-preview" id="audioPillPreview"></div>
             <div class="audio-pill-track"><div class="audio-pill-fill" style="width:38%"></div></div>
           </div>
         </div>
@@ -57,6 +59,8 @@ export class ConversationScreen {
           <div class="nav-btn" id="audioToggleBtn" title="Audio">${icons.music}</div>
           <textarea class="compose-input" id="composeInput" rows="1" placeholder="Message…"></textarea>
           <div class="nav-btn" id="emojiBtn" title="Emoji">${icons.emoji}</div>
+          <input id="composeMediaInput" type="file" accept="image/*" hidden />
+          <div class="nav-btn" id="mediaBtn" title="Attach image">${icons.image}</div>
           <div class="nav-btn" id="exportBtn" title="Export">${icons.export}</div>
           <div class="send-btn" id="sendBtn">${icons.send}</div>
         </div>
@@ -77,6 +81,8 @@ export class ConversationScreen {
     this._el.querySelector('#menuBtn').addEventListener('click', () => this._openHub())
     this._el.querySelector('#exportBtn').addEventListener('click', () => this._openExport())
     this._el.querySelector('#audioToggleBtn').addEventListener('click', () => this._toggleAudioPill())
+    this._el.querySelector('#mediaBtn').addEventListener('click', () => this._el.querySelector('#composeMediaInput')?.click())
+    this._el.querySelector('#composeMediaInput').addEventListener('change', e => this._pickComposeMedia(e.target))
     this._el.querySelector('#emojiBtn').addEventListener('click', e => this._toggleEmojiPicker(e.currentTarget))
 
     this._el.querySelectorAll('.audio-pill-button').forEach(btn => {
@@ -350,12 +356,14 @@ export class ConversationScreen {
       this._editingMsgId = null
       this._editingSceneId = null
     } else {
-      store.addMessage(this.projectId, scene.id, this._activeActorId, text)
+      store.addMessage(this.projectId, scene.id, this._activeActorId, text, this._composePendingMedia ? { media: this._composePendingMedia } : {})
     }
 
     input.value = ''
+    this._composePendingMedia = ''
     input.style.height = 'auto'
     input.dispatchEvent(new Event('input'))
+    this._syncComposeMediaPreview()
   }
 
   _openHub() {
@@ -376,6 +384,30 @@ export class ConversationScreen {
     const sub = this._el.querySelector('#audioPillSub')
     if (pill) pill.classList.toggle('open', this._audioToolsOpen)
     if (sub) sub.textContent = this._audioToolsOpen ? 'Ready for voice and media tools' : 'Hidden while typing'
+    this._syncComposeMediaPreview()
+  }
+
+  _pickComposeMedia(input) {
+    const file = input?.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      this._composePendingMedia = String(reader.result || '')
+      this._syncComposeMediaPreview()
+      this._toggleAudioPill()
+    }
+    reader.readAsDataURL(file)
+    input.value = ''
+  }
+
+  _syncComposeMediaPreview() {
+    const wrap = this._el.querySelector('#audioPillPreview')
+    if (!wrap) return
+    if (!this._composePendingMedia) {
+      wrap.innerHTML = ''
+      return
+    }
+    wrap.innerHTML = `<div class="audio-pill-thumb"><img src="${this._composePendingMedia}" alt="attachment preview"><span>Attachment ready</span></div>`
   }
 
   _toggleEmojiPicker(anchor) {

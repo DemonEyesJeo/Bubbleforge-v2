@@ -59,6 +59,7 @@ export function renderMessages(messages, actors, onBubbleTap) {
                  data-msg-id="${msg.id}"
                  data-actor-id="${actor.id}"
                  title="${escHtml(msg.text)}">
+              ${msg.media ? `<img class="bubble-media" src="${escAttr(msg.media)}" alt="attachment" />` : ''}
               <div class="bubble-text">${escHtml(msg.text)}</div>
               ${msg.reaction ? `<div class="bubble-reaction" aria-label="Reaction">${escHtml(msg.reaction)}</div>` : ''}
             </div>
@@ -107,4 +108,8 @@ export function hexToRgb(hex) {
 
 function escHtml(str) {
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+}
+
+function escAttr(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
 }

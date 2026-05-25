@@ -207,13 +207,13 @@ class Store {
   }
 
   // ── Messages ─────────────────────────────────
-  addMessage(projectId, sceneId, actorId, text) {
+  addMessage(projectId, sceneId, actorId, text, extras = {}) {
     const p = this.getProject(projectId)
     if (!p) return null
     const scene = p.scenes.find(s => s.id === sceneId)
     if (!scene) return null
     this._snapshot()
-    const msg = { id: uuid(), actor_id: actorId, text: text.trim(), ts: now() }
+    const msg = { id: uuid(), actor_id: actorId, text: text.trim(), ts: now(), ...extras }
     scene.messages.push(msg)
     p.updated_at = now()
     this._save()
