@@ -184,6 +184,41 @@ class Store {
     return s
   }
 
+  duplicateScene(projectId, sceneId) {
+    const p = this.getProject(projectId)
+    if (!p) return null
+    const src = p.scenes.find(s => s.id === sceneId)
+    if (!src) return null
+
+    this._snapshot()
+    const copy = {
+      ...src,
+      id: uuid(),
+      name: `${src.name} Copy`,
+      messages: (src.messages || []).map(m => ({ ...m, id: uuid() })),
+    }
+    p.scenes.push(copy)
+    p.updated_at = now()
+    this._save()
+    this._emit('project-changed', projectId)
+    return copy
+  }
+
+  clearSceneMessages(projectId, sceneId) {
+    const p = this.getProject(projectId)
+    if (!p) return false
+    const scene = p.scenes.find(s => s.id === sceneId)
+    if (!scene) return false
+    if (!scene.messages?.length) return false
+
+    this._snapshot()
+    scene.messages = []
+    p.updated_at = now()
+    this._save()
+    this._emit('project-changed', projectId)
+    return true
+  }
+
   updateScene(projectId, sceneId, patch) {
     const p = this.getProject(projectId)
     if (!p) return

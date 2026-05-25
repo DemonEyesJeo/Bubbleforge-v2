@@ -122,6 +122,27 @@ export class HubPanel {
         const s = store.addScene(this.projectId, `Scene ${p.scenes.length + 1}`)
         if (s) { store.setActiveScene(this.projectId, s.id); this.dismiss() }
       })
+      body.querySelector('#duplicateSceneBtn')?.addEventListener('click', () => {
+        const activeScene = store.getActiveScene(this.projectId)
+        if (!activeScene) return
+        const copy = store.duplicateScene(this.projectId, activeScene.id)
+        if (copy) {
+          store.setActiveScene(this.projectId, copy.id)
+          this.dismiss()
+        }
+      })
+      body.querySelector('#clearSceneBtn')?.addEventListener('click', () => {
+        const activeScene = store.getActiveScene(this.projectId)
+        if (!activeScene) return
+        const ok = window.confirm(`Clear all messages from "${activeScene.name}"?`)
+        if (!ok) return
+        const cleared = store.clearSceneMessages(this.projectId, activeScene.id)
+        if (cleared) {
+          this.dismiss()
+        } else {
+          this._snack('This scene is already empty.')
+        }
+      })
     } else if (tab === 'settings') {
       title.textContent = 'Settings'
       sub.textContent = p.name
@@ -228,6 +249,18 @@ export class HubPanel {
         </div>`
     }).join('')
     return rows + `
+      <div class="hub-list-item" id="duplicateSceneBtn" style="margin-top:4px;">
+        <div class="hub-list-icon" style="background:rgba(41,121,255,0.10);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="7" y="7" width="10" height="10" rx="2" stroke="#2979FF" stroke-width="2"/><rect x="4" y="4" width="10" height="10" rx="2" stroke="#2979FF" stroke-width="2" opacity="0.45"/></svg>
+        </div>
+        <div class="hub-list-text"><div class="hub-list-title" style="color:var(--accent);">Duplicate active scene</div></div>
+      </div>
+      <div class="hub-list-item" id="clearSceneBtn" style="margin-top:4px;">
+        <div class="hub-list-icon" style="background:rgba(245,0,87,0.12);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5h6v2M8 10v7M12 10v7M16 10v7" stroke="#F50057" stroke-width="2" stroke-linecap="round"/><path d="M6 7l1 12h10l1-12" stroke="#F50057" stroke-width="2"/></svg>
+        </div>
+        <div class="hub-list-text"><div class="hub-list-title" style="color:var(--danger);">Clear active scene messages</div></div>
+      </div>
       <div class="hub-list-item" id="addSceneBtn" style="margin-top:4px;">
         <div class="hub-list-icon" style="background:rgba(41,121,255,0.10);">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#2979FF" stroke-width="2" stroke-linecap="round"/></svg>
