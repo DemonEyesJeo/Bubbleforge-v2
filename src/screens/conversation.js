@@ -190,6 +190,12 @@ export class ConversationScreen {
 
   destroy() {
     store.off('project-changed', this._onChange)
+    try {
+      if (this._audioRecorder && this._audioRecorder.state === 'recording') {
+        this._audioRecorder.stop()
+      }
+    } catch {}
+    this._stopAudioStream()
     this._hub?.dismiss()
     this._exportRail?.dismiss()
     this._stopComposeMusic()
