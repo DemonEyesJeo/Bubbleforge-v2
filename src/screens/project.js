@@ -162,12 +162,7 @@ export class ProjectScreen {
         const sceneId = row.dataset.sceneId
         if (!sceneId) return
         store.setActiveScene(this.projectId, sceneId)
-        const scene = store.getScene(this.projectId, sceneId)
-        if (this._sceneKind(scene) === 'conversation') {
-          push('conversation', { projectId: this.projectId })
-          return
-        }
-        this._refresh()
+        push('conversation', { projectId: this.projectId, sceneId })
       }
 
       row.addEventListener('click', openScene)
