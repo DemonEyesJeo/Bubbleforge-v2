@@ -286,6 +286,17 @@ export class HomeScreen {
     }
   }
 
+  _openRestorePurchasesRequest() {
+    const subject = encodeURIComponent('Bubbleforge restore purchases request')
+    const body = encodeURIComponent('Hi Bubbleforge team,\n\nPlease help restore my purchases for this account.\n\nThanks!\n')
+    const mailto = `mailto:${this._supportEmail}?subject=${subject}&body=${body}`
+    try {
+      window.location.href = mailto
+    } catch {
+      this._snack(`Contact: ${this._supportEmail}`)
+    }
+  }
+
   _openGroupsSheet() {
     if (this._groupsOverlay) return
 
@@ -465,7 +476,7 @@ export class HomeScreen {
         } else if (title === 'X / Twitter') {
           this._openExternal(this._xUrl, this._xUrl)
         } else if (title === 'Restore purchases') {
-          this._snack('Restore purchases is coming soon.')
+          this._openRestorePurchasesRequest()
         } else if (title === 'Credits & licenses') {
           this._openCreditsSheet()
         } else if (title === 'Upgrade to PRO') {
