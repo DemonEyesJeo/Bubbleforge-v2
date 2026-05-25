@@ -22,7 +22,7 @@ export class HomeScreen {
       </div>
       <div class="home-body" id="homeBody">
         <div class="home-header" id="homeHeader">
-          <h1>My Stories</h1>
+          <h1>Projects</h1>
           <div class="fab" id="newProjectBtn">${icons.add}</div>
         </div>
         <div class="home-pane-wrap">

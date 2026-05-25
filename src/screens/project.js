@@ -36,18 +36,24 @@ export class ProjectScreen {
 
         <div class="project-actions">
           <button class="project-action-card primary" id="projectConversationBtn" type="button">
+            <div class="project-action-icon">${icons.scene}</div>
             <div class="project-action-title">Conversation</div>
-            <div class="project-action-sub">Open chat timeline and write messages</div>
+            <div class="project-action-sub">Create blank conversation scene</div>
           </button>
           <button class="project-action-card" id="projectTitleBtn" type="button">
+            <div class="project-action-icon">T</div>
             <div class="project-action-title">Title</div>
-            <div class="project-action-sub" id="projectTitleValue">Scene 1</div>
+            <div class="project-action-sub">Create blank title scene</div>
           </button>
           <button class="project-action-card" id="projectQuoteBtn" type="button">
+            <div class="project-action-icon">❝</div>
             <div class="project-action-title">Quote</div>
-            <div class="project-action-sub" id="projectQuoteValue">Add a scene quote</div>
+            <div class="project-action-sub">Create blank quote scene</div>
           </button>
         </div>
+
+        <div class="project-section-title">Scenes</div>
+        <div class="project-scene-list" id="projectSceneList"></div>
       </div>
     `
     return el
@@ -57,10 +63,10 @@ export class ProjectScreen {
     store.setLastOpenedProjectId(this.projectId)
     this._el.querySelector('#projectBackBtn')?.addEventListener('click', () => pop())
     this._el.querySelector('#projectConversationBtn')?.addEventListener('click', () => {
-      push('conversation', { projectId: this.projectId })
+      this._createBlankScene('conversation')
     })
-    this._el.querySelector('#projectTitleBtn')?.addEventListener('click', () => this._editSceneTitle())
-    this._el.querySelector('#projectQuoteBtn')?.addEventListener('click', () => this._editSceneQuote())
+    this._el.querySelector('#projectTitleBtn')?.addEventListener('click', () => this._createBlankScene('title'))
+    this._el.querySelector('#projectQuoteBtn')?.addEventListener('click', () => this._createBlankScene('quote'))
 
     store.on('project-changed', this._onProjectChange)
     store.on('projects-changed', this._onProjectsChange)
@@ -90,28 +96,74 @@ export class ProjectScreen {
     this._el.querySelector('#projectNavSub').textContent = `${sceneCount} scene${sceneCount === 1 ? '' : 's'} · ${messageCount} messages`
     this._el.querySelector('#projectStoryName').textContent = project.name || 'Untitled Story'
     this._el.querySelector('#projectMeta').textContent = scene ? `Active scene: ${scene.name || 'Scene'}` : 'No active scene'
-
-    this._el.querySelector('#projectTitleValue').textContent = scene?.name || 'Set scene title'
-    this._el.querySelector('#projectQuoteValue').textContent = scene?.quote?.trim() ? scene.quote : 'Add a scene quote'
+    this._renderSceneList(project)
   }
 
-  _editSceneTitle() {
-    const scene = store.getActiveScene(this.projectId)
+  _createBlankScene(kind) {
+    const defaults = {
+      conversation: { name: 'Scene', quote: '' },
+      title: { name: 'Untitled', quote: '' },
+      quote: { name: 'Quote', quote: '' },
+    }
+    const draft = defaults[kind] || defaults.conversation
+    const scene = store.addScene(this.projectId, draft.name)
     if (!scene) return
-    const next = window.prompt('Scene title', scene.name || '')
-    if (next == null) return
-    const title = next.trim()
-    if (!title) return
-    store.updateScene(this.projectId, scene.id, { name: title })
+
+    store.updateScene(this.projectId, scene.id, { kind, quote: draft.quote })
+    store.setActiveScene(this.projectId, scene.id)
+
+    if (kind === 'conversation') {
+      push('conversation', { projectId: this.projectId })
+      return
+    }
     this._refresh()
   }
 
-  _editSceneQuote() {
-    const scene = store.getActiveScene(this.projectId)
-    if (!scene) return
-    const next = window.prompt('Scene quote', scene.quote || '')
-    if (next == null) return
-    store.updateScene(this.projectId, scene.id, { quote: next.trim() })
-    this._refresh()
+  _sceneKind(scene) {
+    const kind = String(scene?.kind || '').toLowerCase()
+    if (kind === 'conversation' || kind === 'title' || kind === 'quote') return kind
+    if (scene?.quote?.trim()) return 'quote'
+    return 'conversation'
+  }
+
+  _renderSceneList(project) {
+    const list = this._el.querySelector('#projectSceneList')
+    if (!list) return
+    const scenes = project?.scenes || []
+    if (!scenes.length) {
+      list.innerHTML = '<div class="recent-exports-empty">No scenes yet. Use the cards above to create one.</div>'
+      return
+    }
+
+    list.innerHTML = scenes.map((scene, i) => {
+      const kind = this._sceneKind(scene)
+      const kindLabel = kind.charAt(0).toUpperCase() + kind.slice(1)
+      const icon = kind === 'title' ? 'T' : kind === 'quote' ? '❝' : '💬'
+      const name = scene?.name?.trim() || (kind === 'title' ? 'Untitled' : kind === 'quote' ? 'Quote' : 'Scene')
+      return `
+        <button class="project-scene-row" data-scene-id="${scene.id}" type="button">
+          <div class="project-scene-icon">${icon}</div>
+          <div class="project-scene-copy">
+            <div class="project-scene-name">${i + 1}. ${name}</div>
+            <div class="project-scene-kind">${kindLabel}</div>
+          </div>
+          <div class="project-scene-menu">•••</div>
+        </button>
+      `
+    }).join('')
+
+    list.querySelectorAll('.project-scene-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const sceneId = row.dataset.sceneId
+        if (!sceneId) return
+        store.setActiveScene(this.projectId, sceneId)
+        const scene = store.getScene(this.projectId, sceneId)
+        if (this._sceneKind(scene) === 'conversation') {
+          push('conversation', { projectId: this.projectId })
+          return
+        }
+        this._refresh()
+      })
+    })
   }
 }
