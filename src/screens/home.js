@@ -4,6 +4,7 @@ import { icons, statusIcons } from '../components/icons.js'
 
 export class HomeScreen {
   constructor() {
+    this._supportEmail = 'jeovan.flete@protonmail.com'
     this._onChange = () => this._refreshList()
     this._activeTab = 'projects'
     this._characterSort = 'name'
@@ -273,6 +274,17 @@ export class HomeScreen {
     }, 220)
   }
 
+  _openSupportEmail() {
+    const subject = encodeURIComponent('Bubbleforge support')
+    const body = encodeURIComponent('Hi Bubbleforge team,\n\n')
+    const mailto = `mailto:${this._supportEmail}?subject=${subject}&body=${body}`
+    try {
+      window.location.href = mailto
+    } catch {
+      this._snack(`Contact: ${this._supportEmail}`)
+    }
+  }
+
   _openGroupsSheet() {
     if (this._groupsOverlay) return
 
@@ -438,7 +450,7 @@ export class HomeScreen {
       row.addEventListener('click', () => {
         const title = row.querySelector('.home-setting-title')?.textContent || ''
         if (title === 'Email') {
-          this._snack('Support email is not wired yet in v2.')
+          this._openSupportEmail()
         } else if (title === 'Credits & licenses') {
           this._openCreditsSheet()
         } else if (title === 'Upgrade to PRO') {
@@ -446,6 +458,17 @@ export class HomeScreen {
         }
       })
     })
+  }
+
+  _openSupportEmail() {
+    const subject = encodeURIComponent('Bubbleforge support')
+    const body = encodeURIComponent('Hi Bubbleforge team,\n\n')
+    const mailto = `mailto:${this._supportEmail}?subject=${subject}&body=${body}`
+    try {
+      window.location.href = mailto
+    } catch {
+      this._snack(`Contact: ${this._supportEmail}`)
+    }
   }
 
   _switchTab(tab) {
