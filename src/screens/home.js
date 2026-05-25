@@ -451,6 +451,12 @@ export class HomeScreen {
         const title = row.querySelector('.home-setting-title')?.textContent || ''
         if (title === 'Email') {
           this._openSupportEmail()
+        } else if (title === 'TikTok') {
+          this._snack('TikTok link is coming soon.')
+        } else if (title === 'X / Twitter') {
+          this._snack('X / Twitter link is coming soon.')
+        } else if (title === 'Restore purchases') {
+          this._snack('Restore purchases is coming soon.')
         } else if (title === 'Credits & licenses') {
           this._openCreditsSheet()
         } else if (title === 'Upgrade to PRO') {
