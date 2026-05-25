@@ -67,7 +67,7 @@ export class HubPanel {
   <div class="hub-rail">
     <div class="hub-rail-btn active" data-tab="actors">${icons.actors}</div>
     <div class="hub-rail-btn" data-tab="scene">${icons.scene}</div>
-    <div class="hub-rail-btn" data-tab="script">${icons.script}</div>
+    <div class="hub-rail-btn" data-tab="script" title="Scenes" aria-label="Scenes">${icons.script}</div>
     <div class="hub-rail-btn" data-tab="settings">${icons.settings}</div>
     <div style="flex:1;"></div>
     <div class="hub-rail-btn" id="hubClose">${icons.close}</div>
@@ -131,7 +131,7 @@ export class HubPanel {
       body.innerHTML = this._sceneTab(p, scene)
       this._bindSceneTab(body, p, scene)
     } else if (tab === 'script') {
-      title.textContent = 'Script'
+      title.textContent = 'Scenes'
       sub.textContent = `${p.scenes.length} scenes`
       body.innerHTML = this._scriptTab(p)
       body.querySelectorAll('.hub-list-item[data-scene-id]').forEach(row => {
