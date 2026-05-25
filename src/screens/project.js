@@ -1,6 +1,7 @@
 import { store } from '../store.js'
 import { push, pop } from '../router.js'
-import { icons, statusIcons } from '../components/icons.js'
+import { icons } from '../components/icons.js'
+import { renderStatusBar } from '../components/status-bar.js'
 
 export class ProjectScreen {
   constructor({ projectId }) {
@@ -16,8 +17,7 @@ export class ProjectScreen {
     el.className = 'project-screen'
     el.innerHTML = `
       <div class="status-bar">
-        <span class="time">9:41</span>
-        ${statusIcons()}
+        <div id="statusBarHost">${renderStatusBar()}</div>
       </div>
       <div class="nav-bar">
         <div class="nav-back" id="projectBackBtn">${icons.back} Stories</div>
@@ -89,6 +89,9 @@ export class ProjectScreen {
 
     this._el.querySelector('#projectNavTitle').textContent = project.name || 'Project'
     this._el.querySelector('#projectNavSub').textContent = `${sceneCount} scene${sceneCount === 1 ? '' : 's'} · ${messageCount} messages`
+    const status = store.getSceneStatusBar(this.projectId, scene?.id)
+    const host = this._el.querySelector('#statusBarHost')
+    if (host) host.innerHTML = renderStatusBar(status)
     this._renderSceneList(project)
   }
 

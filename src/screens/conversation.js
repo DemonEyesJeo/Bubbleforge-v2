@@ -1,9 +1,10 @@
 import { store } from '../store.js'
 import { push, pop } from '../router.js'
-import { icons, statusIcons } from '../components/icons.js'
+import { icons } from '../components/icons.js'
 import { renderMessages, renderTypingIndicator } from '../components/bubble.js'
 import { HubPanel } from '../components/hub-panel.js'
 import { ExportRail } from '../components/export-rail.js'
+import { renderStatusBar } from '../components/status-bar.js'
 
 export class ConversationScreen {
   constructor({ projectId }) {
@@ -34,8 +35,7 @@ export class ConversationScreen {
     el.className = 'conversation-screen'
     el.innerHTML = `
       <div class="status-bar">
-        <span class="time">9:41</span>
-        ${statusIcons()}
+        <div id="statusBarHost">${renderStatusBar()}</div>
       </div>
       <div class="nav-bar">
         <div class="nav-back" id="backBtn">${icons.back} Stories</div>
@@ -222,6 +222,9 @@ export class ConversationScreen {
     this._el.querySelector('#sceneTitle').textContent = scene?.name || p.name
     this._el.querySelector('#sceneSub').textContent =
       `${p.scenes.length} scene${p.scenes.length !== 1 ? 's' : ''} · ${totalMsgs} messages`
+    const status = store.getSceneStatusBar(this.projectId, scene?.id)
+    const statusHost = this._el.querySelector('#statusBarHost')
+    if (statusHost) statusHost.innerHTML = renderStatusBar(status)
 
     // Default active actor to first right-side actor
     if (!this._activeActorId || !p.actors.find(a => a.id === this._activeActorId)) {

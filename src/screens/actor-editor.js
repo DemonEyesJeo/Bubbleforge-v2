@@ -1,7 +1,8 @@
 import { store, ACTOR_COLORS } from '../store.js'
 import { pop } from '../router.js'
-import { icons, statusIcons } from '../components/icons.js'
+import { icons } from '../components/icons.js'
 import { hexToRgb } from '../components/bubble.js'
+import { renderStatusBar } from '../components/status-bar.js'
 
 export class ActorEditorScreen {
   constructor({ projectId, actorId }) {
@@ -33,7 +34,7 @@ export class ActorEditorScreen {
     const canDelete = !this.isNew && (p?.actors?.length || 0) > 1
     const el = document.createElement('div')
     el.innerHTML = `
-      <div class="status-bar"><span class="time">9:41</span>${statusIcons()}</div>
+      <div class="status-bar">${renderStatusBar(store.getSceneStatusBar(this.projectId, store.getActiveScene(this.projectId)?.id))}</div>
       <div class="nav-bar">
         <div class="nav-back" id="backBtn">${icons.back} Back</div>
         <div class="nav-center"><div class="nav-title">${this.isNew ? 'New Actor' : 'Edit Actor'}</div></div>

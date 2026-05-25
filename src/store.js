@@ -1,11 +1,36 @@
 const STORAGE_KEY = 'bf_v2_projects'
 const LAST_PROJECT_KEY = 'bf_v2_last_project_id'
+const STATUS_TEMPLATES_KEY = 'bf_status_templates'
+const STATUS_QUICKPICKS_KEY = 'bf_status_quickpicks'
 
 function uuid() {
   return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)
 }
 
 function now() { return Date.now() }
+
+function defaultStatusBar() {
+  return {
+    time: '9:41',
+    carrier: '',
+    network: 'LTE',
+    signal: 'full',
+    wifi: 'full',
+    battery: 'full',
+    charging: false,
+    low_power: false,
+    show_percent: false,
+    icons: [],
+  }
+}
+
+function defaultStatusQuickpicks() {
+  return {
+    carrier: ['Gringotts Mobile', 'Stark Industries', 'HoloNet'],
+    network: ['MAGIC', 'FLOO', 'IMPERIAL'],
+    time: ['3:47 AM', '11:59 PM', '??:??'],
+  }
+}
 
 export const ACTOR_COLORS = [
   '#2979FF','#00BFA5','#FF6D00','#7C4DFF',
@@ -58,6 +83,7 @@ function sampleProject() {
         id: sceneId,
         name: 'The Rooftop',
         quote: 'Some things don\'t need words.',
+        status_bar: defaultStatusBar(),
         messages: [
           { id: uuid(), actor_id: mayaId, text: 'You actually showed up.',                           ts: now() },
           { id: uuid(), actor_id: alexId, text: 'I said I would.',                                   ts: now() + 1 },
@@ -157,7 +183,7 @@ class Store {
   createProject(name = 'New Story') {
     this._snapshot()
     const p = { ...sampleProject(), id: uuid(), name, created_at: now(), updated_at: now(), scenes: [], actors: [], groups: [] }
-    const firstScene = { id: uuid(), name: 'Scene 1', quote: '', messages: [] }
+    const firstScene = { id: uuid(), name: 'Scene 1', quote: '', status_bar: defaultStatusBar(), messages: [] }
     p.scenes = [firstScene]
     p.active_scene_id = firstScene.id
     this._projects.unshift(p)
@@ -203,7 +229,7 @@ class Store {
     const p = this.getProject(projectId)
     if (!p) return null
     this._snapshot()
-    const s = { id: uuid(), name, quote: '', messages: [] }
+    const s = { id: uuid(), name, quote: '', status_bar: defaultStatusBar(), messages: [] }
     p.scenes.push(s)
     p.updated_at = now()
     this._save()
@@ -274,6 +300,84 @@ class Store {
 
   setActiveScene(projectId, sceneId) {
     this.updateProject(projectId, { active_scene_id: sceneId })
+  }
+
+  getSceneStatusBar(projectId, sceneId) {
+    const scene = this.getScene(projectId, sceneId)
+    return { ...defaultStatusBar(), ...(scene?.status_bar || {}) }
+  }
+
+  updateSceneStatusBar(projectId, sceneId, patch) {
+    const p = this.getProject(projectId)
+    if (!p) return
+    const idx = p.scenes.findIndex(s => s.id === sceneId)
+    if (idx < 0) return
+    this._snapshot()
+    const current = { ...defaultStatusBar(), ...(p.scenes[idx].status_bar || {}) }
+    p.scenes[idx] = { ...p.scenes[idx], status_bar: { ...current, ...patch } }
+    p.updated_at = now()
+    this._save()
+    this._emit('project-changed', projectId)
+  }
+
+  getStatusTemplates() {
+    try {
+      const raw = localStorage.getItem(STATUS_TEMPLATES_KEY)
+      const data = raw ? JSON.parse(raw) : []
+      return Array.isArray(data) ? data : []
+    } catch {
+      return []
+    }
+  }
+
+  saveStatusTemplate(template) {
+    const list = this.getStatusTemplates()
+    const row = {
+      id: uuid(),
+      name: String(template?.name || 'Untitled'),
+      emoji: String(template?.emoji || '⭐'),
+      status_bar: { ...defaultStatusBar(), ...(template?.status_bar || {}) },
+      created_at: now(),
+    }
+    list.unshift(row)
+    localStorage.setItem(STATUS_TEMPLATES_KEY, JSON.stringify(list))
+    return row
+  }
+
+  deleteStatusTemplate(id) {
+    const list = this.getStatusTemplates().filter(t => t.id !== id)
+    localStorage.setItem(STATUS_TEMPLATES_KEY, JSON.stringify(list))
+  }
+
+  getStatusQuickpicks() {
+    try {
+      const raw = localStorage.getItem(STATUS_QUICKPICKS_KEY)
+      const data = raw ? JSON.parse(raw) : defaultStatusQuickpicks()
+      return {
+        ...defaultStatusQuickpicks(),
+        ...(data || {}),
+      }
+    } catch {
+      return defaultStatusQuickpicks()
+    }
+  }
+
+  addStatusQuickpick(field, value) {
+    const v = String(value || '').trim()
+    if (!v) return
+    if (!['carrier', 'network', 'time'].includes(field)) return
+    const picks = this.getStatusQuickpicks()
+    const list = Array.isArray(picks[field]) ? picks[field] : []
+    if (!list.includes(v)) list.unshift(v)
+    picks[field] = list.slice(0, 8)
+    localStorage.setItem(STATUS_QUICKPICKS_KEY, JSON.stringify(picks))
+  }
+
+  removeStatusQuickpick(field, value) {
+    if (!['carrier', 'network', 'time'].includes(field)) return
+    const picks = this.getStatusQuickpicks()
+    picks[field] = (Array.isArray(picks[field]) ? picks[field] : []).filter(v => v !== value)
+    localStorage.setItem(STATUS_QUICKPICKS_KEY, JSON.stringify(picks))
   }
 
   // ── Messages ─────────────────────────────────

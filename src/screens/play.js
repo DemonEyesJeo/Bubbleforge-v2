@@ -1,8 +1,9 @@
 import { store } from '../store.js'
 import { pop } from '../router.js'
-import { icons, statusIcons } from '../components/icons.js'
+import { icons } from '../components/icons.js'
 import { renderMessages, renderTypingIndicator } from '../components/bubble.js'
 import { KeyboardOverlay } from '../components/keyboard.js'
+import { renderStatusBar } from '../components/status-bar.js'
 
 export class PlayScreen {
   constructor({ projectId }) {
@@ -29,8 +30,8 @@ export class PlayScreen {
     el.className = 'play-screen'
     el.innerHTML = `
       <div class="status-bar" style="background:#000;">
-        <span class="time">9:41</span>
-        <div style="color:var(--accent);font-size:14px;cursor:pointer;" id="closeBtn">✕ Close</div>
+        <div id="statusBarHost">${renderStatusBar(store.getSceneStatusBar(this.projectId, store.getActiveScene(this.projectId)?.id))}</div>
+        <div class="play-close-btn" id="closeBtn">✕ Close</div>
       </div>
       <div class="play-canvas" id="playCanvas"></div>
       <div class="compose-input play-ghost-input" id="ghostInput" aria-hidden="true"></div>

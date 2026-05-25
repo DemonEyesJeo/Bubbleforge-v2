@@ -1,6 +1,7 @@
 import { store } from '../store.js'
 import { push } from '../router.js'
-import { icons, statusIcons } from '../components/icons.js'
+import { icons } from '../components/icons.js'
+import { renderStatusBar } from '../components/status-bar.js'
 
 export class HomeScreen {
   constructor() {
@@ -17,8 +18,7 @@ export class HomeScreen {
     const el = document.createElement('div')
     el.innerHTML = `
       <div class="status-bar">
-        <span class="time">9:41</span>
-        ${statusIcons()}
+        ${renderStatusBar()}
       </div>
       <div class="home-body" id="homeBody">
         <div class="home-header" id="homeHeader">
