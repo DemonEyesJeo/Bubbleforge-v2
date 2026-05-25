@@ -630,7 +630,15 @@ export class ConversationScreen {
       })
       this._snack(`Music selected: ${file.name}`)
     } catch (err) {
+      const previewUrl = URL.createObjectURL(file)
+      this._setComposeMusicSource(previewUrl, file.name)
+      store.updateRenderSettings(this.projectId, {
+        music_path: null,
+        music_title: file.name,
+        music_preview_url: '',
+      })
       this._snack(err?.message || 'Could not upload music file')
+      this._snack('Using local preview only. Export music requires backend upload.')
     }
   }
 
