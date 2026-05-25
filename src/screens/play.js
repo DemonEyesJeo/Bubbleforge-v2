@@ -197,7 +197,8 @@ export class PlayScreen {
     }
     this._playing = true
     this._el.querySelector('#playBtn').innerHTML = icons.pause
-    this._kb?.show()
+    if (rs.typing_animation !== false) this._kb?.show()
+    else this._kb?.hide()
     this._runNext(p, scene, rs)
   }
 
