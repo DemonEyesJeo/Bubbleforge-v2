@@ -10,6 +10,7 @@ const FAKEOUT_PROB = 0.35
 export class PlayScreen {
   constructor({ projectId }) {
     this.projectId = projectId
+    this._sceneId = null
     this._playing  = false
     this._progress = 0
     this._kb       = null
@@ -23,6 +24,7 @@ export class PlayScreen {
     this._totalMs = 0
     this._timelineMs = []
     this._removeScrubListeners = null
+    this._removeSwipeListeners = null
     this._playheadMs = 0
     this._playCtx = null
   }
@@ -39,7 +41,9 @@ export class PlayScreen {
       <div class="compose-input play-ghost-input" id="ghostInput" aria-hidden="true"></div>
       <div class="keyboard-placeholder" id="kbPlaceholder"></div>
       <div class="play-controls">
+        <div class="play-scene-nav-btn" id="prevSceneBtn">${icons.back}</div>
         <div class="play-btn" id="playBtn">${icons.play}</div>
+        <div class="play-scene-nav-btn" id="nextSceneBtn">${icons.chev}</div>
         <div class="progress-wrap">
           <div class="progress-times">
             <span id="timeCurrent">0:00</span>
@@ -57,20 +61,10 @@ export class PlayScreen {
     const p = store.getProject(this.projectId)
     if (!p) return
 
-    const rs    = p.render_settings || {}
+    const rs = p.render_settings || {}
     const scene = store.getActiveScene(this.projectId)
-    const status = store.getSceneStatusBar(this.projectId, scene?.id)
-    const statusHost = this._el.querySelector('#statusBarHost')
-    if (statusHost) statusHost.innerHTML = renderStatusBar(status)
-
-    // Build message queue
-    this._msgQueue = scene?.messages || []
-    this._shownMessages = []
-
-    this._applyTheme(rs)
-
-    // Render initial empty canvas with scene header
-    this._renderCanvas(p, scene, [])
+    this._sceneId = scene?.id || null
+    this._rebuildForScene(p, scene, rs)
 
     // Controls
     this._el.querySelector('#closeBtn').addEventListener('click', () => {
@@ -78,13 +72,124 @@ export class PlayScreen {
       pop()
     })
 
+    this._el.querySelector('#prevSceneBtn')?.addEventListener('click', () => this._gotoScene(-1))
+    this._el.querySelector('#nextSceneBtn')?.addEventListener('click', () => this._gotoScene(1))
+
     const playBtn = this._el.querySelector('#playBtn')
     playBtn.addEventListener('click', () => {
+      const ctx = this._getPlayContext()
+      if (!ctx.p || !ctx.scene) return
       if (this._playing) this._pausePlayback()
-      else               this._startPlayback(p, scene, rs)
+      else               this._startPlayback(ctx.p, ctx.scene, ctx.rs)
     })
 
-    // Calculate total duration for progress bar
+    const track = this._el.querySelector('#progressTrack')
+    let scrubbing = false
+    let resumeAfterScrub = false
+
+    const applyScrub = (clientX) => {
+      const ctx = this._getPlayContext()
+      if (!ctx.p || !ctx.scene) return
+      const rect = track.getBoundingClientRect()
+      if (!rect.width) return
+      const frac = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+      const targetMs = this._totalMs * frac
+      this._applyPlayheadState(targetMs, ctx.p, ctx.scene, ctx.rs)
+    }
+
+    const onPointerMove = (e) => {
+      if (!scrubbing) return
+      applyScrub(e.clientX)
+    }
+    const onPointerUp = (e) => {
+      if (!scrubbing) return
+      applyScrub(e.clientX)
+      scrubbing = false
+      track.releasePointerCapture?.(e.pointerId)
+      if (resumeAfterScrub && this._msgIndex < this._msgQueue.length) {
+        const ctx = this._getPlayContext()
+        if (ctx.p && ctx.scene) this._startPlayback(ctx.p, ctx.scene, ctx.rs)
+      }
+      resumeAfterScrub = false
+    }
+    const onPointerDown = (e) => {
+      resumeAfterScrub = this._playing
+      this._pausePlayback()
+      scrubbing = true
+      track.setPointerCapture?.(e.pointerId)
+      applyScrub(e.clientX)
+    }
+
+    track.addEventListener('pointerdown', onPointerDown)
+    track.addEventListener('pointermove', onPointerMove)
+    track.addEventListener('pointerup', onPointerUp)
+    track.addEventListener('pointercancel', onPointerUp)
+
+    const canvas = this._el.querySelector('#playCanvas')
+    let swipeStartX = null
+    const onSwipeDown = (e) => {
+      swipeStartX = e.clientX
+    }
+    const onSwipeUp = (e) => {
+      if (swipeStartX == null) return
+      const deltaX = e.clientX - swipeStartX
+      swipeStartX = null
+      if (Math.abs(deltaX) <= 60) return
+      this._gotoScene(deltaX < 0 ? 1 : -1)
+    }
+    const onSwipeCancel = () => { swipeStartX = null }
+    canvas.addEventListener('pointerdown', onSwipeDown)
+    canvas.addEventListener('pointerup', onSwipeUp)
+    canvas.addEventListener('pointercancel', onSwipeCancel)
+
+    this._removeScrubListeners = () => {
+      track.removeEventListener('pointerdown', onPointerDown)
+      track.removeEventListener('pointermove', onPointerMove)
+      track.removeEventListener('pointerup', onPointerUp)
+      track.removeEventListener('pointercancel', onPointerUp)
+    }
+    this._removeSwipeListeners = () => {
+      canvas.removeEventListener('pointerdown', onSwipeDown)
+      canvas.removeEventListener('pointerup', onSwipeUp)
+      canvas.removeEventListener('pointercancel', onSwipeCancel)
+    }
+  }
+
+  destroy() {
+    this._stopPlayback()
+    this._removeScrubListeners?.()
+    this._removeScrubListeners = null
+    this._removeSwipeListeners?.()
+    this._removeSwipeListeners = null
+    this._playCtx = null
+    this._kb?.destroy()
+  }
+
+  _getPlayContext() {
+    const p = store.getProject(this.projectId)
+    if (!p) return { p: null, scene: null, rs: {} }
+    const scene = p.scenes.find(s => s.id === this._sceneId) || store.getActiveScene(this.projectId)
+    const rs = p.render_settings || {}
+    return { p, scene, rs }
+  }
+
+  _rebuildForScene(p, scene, rs) {
+    if (!p || !scene) return
+    this._sceneId = scene.id
+    this._msgQueue = scene.messages || []
+    this._shownMessages = []
+    this._msgIndex = 0
+    this._playheadMs = 0
+    this._setGhostText('')
+    this._setKeyboardActive(false)
+
+    const status = store.getSceneStatusBar(this.projectId, scene.id)
+    const statusHost = this._el.querySelector('#statusBarHost')
+    if (statusHost) statusHost.innerHTML = renderStatusBar(status)
+
+    this._applyTheme(rs)
+    this._renderCanvas(p, scene, [])
+
     const typingDur = (rs.typing_duration || 0.08) * 1000
     const indicatorDur = (rs.typing_indicator_duration || 1.2) * 1000
     const indicatorGapDur = (rs.typing_indicator_gap || 0.4) * 1000
@@ -102,62 +207,38 @@ export class PlayScreen {
       this._timelineMs.push(totalMs)
     }
     this._totalMs = totalMs || 10000
+    this._el.querySelector('#progressFill').style.width = '0%'
+    this._el.querySelector('#timeCurrent').textContent = this._formatTime(0)
     this._el.querySelector('#timeTotal').textContent = this._formatTime(this._totalMs / 1000)
-
     this._playCtx = { p, scene, rs }
-
-    const track = this._el.querySelector('#progressTrack')
-    let scrubbing = false
-    let resumeAfterScrub = false
-
-    const applyScrub = (clientX) => {
-      const rect = track.getBoundingClientRect()
-      if (!rect.width) return
-      const frac = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
-      const targetMs = this._totalMs * frac
-      this._applyPlayheadState(targetMs, p, scene, rs)
-    }
-
-    const onPointerMove = (e) => {
-      if (!scrubbing) return
-      applyScrub(e.clientX)
-    }
-    const onPointerUp = (e) => {
-      if (!scrubbing) return
-      applyScrub(e.clientX)
-      scrubbing = false
-      track.releasePointerCapture?.(e.pointerId)
-      if (resumeAfterScrub && this._msgIndex < this._msgQueue.length) {
-        this._startPlayback(p, scene, rs)
-      }
-      resumeAfterScrub = false
-    }
-    const onPointerDown = (e) => {
-      resumeAfterScrub = this._playing
-      this._pausePlayback()
-      scrubbing = true
-      track.setPointerCapture?.(e.pointerId)
-      applyScrub(e.clientX)
-    }
-
-    track.addEventListener('pointerdown', onPointerDown)
-    track.addEventListener('pointermove', onPointerMove)
-    track.addEventListener('pointerup', onPointerUp)
-    track.addEventListener('pointercancel', onPointerUp)
-    this._removeScrubListeners = () => {
-      track.removeEventListener('pointerdown', onPointerDown)
-      track.removeEventListener('pointermove', onPointerMove)
-      track.removeEventListener('pointerup', onPointerUp)
-      track.removeEventListener('pointercancel', onPointerUp)
-    }
+    this._updateSceneNavButtons(p)
   }
 
-  destroy() {
+  _updateSceneNavButtons(p) {
+    const scenes = p?.scenes || []
+    const idx = scenes.findIndex(s => s.id === this._sceneId)
+    const prev = this._el.querySelector('#prevSceneBtn')
+    const next = this._el.querySelector('#nextSceneBtn')
+    const disablePrev = idx <= 0
+    const disableNext = idx < 0 || idx >= scenes.length - 1
+    if (prev) prev.classList.toggle('disabled', disablePrev)
+    if (next) next.classList.toggle('disabled', disableNext)
+  }
+
+  _gotoScene(direction) {
+    const p = store.getProject(this.projectId)
+    if (!p) return
+    const scenes = p.scenes || []
+    const idx = scenes.findIndex(s => s.id === this._sceneId)
+    if (idx < 0) return
+    const next = scenes[idx + direction]
+    if (!next) return
+
+    const rs = p.render_settings || {}
     this._stopPlayback()
-    this._removeScrubListeners?.()
-    this._removeScrubListeners = null
-    this._playCtx = null
-    this._kb?.destroy()
+    this._sceneId = next.id
+    store.setActiveScene(this.projectId, next.id)
+    this._rebuildForScene(p, next, rs)
   }
 
   _renderCanvas(p, scene, messages, extraHtml = '') {
