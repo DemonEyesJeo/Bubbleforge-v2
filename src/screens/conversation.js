@@ -75,6 +75,7 @@ export class ConversationScreen {
                 <div class="audio-pill-music-actions">
                   <button class="audio-pill-mini-btn" id="composeMusicPlayBtn" type="button">${icons.play}</button>
                   <button class="audio-pill-mini-btn" id="composeMusicRewindBtn" type="button">${icons.rewind}</button>
+                  <button class="audio-pill-mini-btn" id="composeMusicClearBtn" type="button">✕</button>
                 </div>
                 <div class="audio-pill-music-time">
                   <span id="composeMusicNow">00:00.0</span>
@@ -119,6 +120,7 @@ export class ConversationScreen {
     this._el.querySelector('#composeMusicPickBtn').addEventListener('click', () => this._el.querySelector('#composeMusicInput')?.click())
     this._el.querySelector('#composeMusicPlayBtn').addEventListener('click', () => this._toggleComposeMusicPlay())
     this._el.querySelector('#composeMusicRewindBtn').addEventListener('click', () => this._rewindComposeMusic())
+    this._el.querySelector('#composeMusicClearBtn').addEventListener('click', () => this._clearComposeMusic())
     this._el.querySelector('#audioAttachBtn').addEventListener('click', () => this._el.querySelector('#composeAudioInput')?.click())
     this._el.querySelector('#audioRecordBtn').addEventListener('click', () => this._toggleAudioRecording())
     this._el.querySelector('#cameraBtn').addEventListener('click', () => this._el.querySelector('#composeCameraInput')?.click())
@@ -641,6 +643,12 @@ export class ConversationScreen {
     const audio = this._composeMusicAudio
     if (!audio) return
     audio.currentTime = Math.max(0, (audio.currentTime || 0) - 5)
+    this._syncComposeMusicTools()
+  }
+
+  _clearComposeMusic() {
+    this._stopComposeMusic()
+    store.updateRenderSettings(this.projectId, { music_path: null, music_title: '' })
     this._syncComposeMusicTools()
   }
 
