@@ -7,6 +7,8 @@ export class ExportRail {
     this.projectId = projectId
     this.onClose = onClose
     this.activeTab = 'keyboard'
+    this._pollTimer = null
+    this._exportState = null
   }
 
   mount() {
@@ -46,6 +48,7 @@ export class ExportRail {
   }
 
   dismiss() {
+    this._stopPolling()
     this._overlay.classList.remove('visible')
     this._rail.classList.remove('visible')
     setTimeout(() => {
@@ -57,6 +60,9 @@ export class ExportRail {
   }
 
   _setTab(tab, el) {
+    if (this._exportState && (this._exportState.status === 'queued' || this._exportState.status === 'running')) {
+      return
+    }
     this.activeTab = tab
     this._rail.querySelectorAll('.rail-tab').forEach(t => t.classList.toggle('active', t === el))
     const p = store.getProject(this.projectId)
@@ -228,16 +234,120 @@ export class ExportRail {
   _doExport() {
     const p = store.getProject(this.projectId)
     if (!p) return
+
+    this._exportState = { status: 'queued', progress: 0, message: 'Starting export…' }
+    this._rail.classList.add('is-exporting')
+    this._renderExportState()
+
     fetch('/api/export', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ project: p }),
     }).then(r => r.json()).then(data => {
-      console.log('Export started:', data)
+      if (!data?.job_id) {
+        throw new Error(data?.error || 'Failed to start export')
+      }
+      this._exportState = { status: 'running', progress: 0, jobId: data.job_id, message: 'Export in progress…' }
+      this._renderExportState()
+      this._startPolling(data.job_id)
     }).catch(() => {
-      // Backend not running — show info snackbar
+      this._stopPolling()
+      this._exportState = {
+        status: 'error',
+        progress: 0,
+        message: 'Export requires the Python backend server. See README.',
+      }
+      this._renderExportState()
       this._snack('Export requires the Python backend server. See README.')
     })
+  }
+
+  _startPolling(jobId) {
+    this._stopPolling()
+    this._pollTimer = setInterval(async () => {
+      try {
+        const resp = await fetch(`/api/export/${jobId}`)
+        const job = await resp.json()
+        if (!resp.ok) {
+          throw new Error(job?.error || 'Export status failed')
+        }
+
+        const state = {
+          status: job.status || 'running',
+          progress: typeof job.progress === 'number' ? job.progress : 0,
+          outputPath: job.output_path,
+          error: job.error,
+        }
+        this._exportState = state
+        this._renderExportState()
+
+        if (state.status === 'done' || state.status === 'error') {
+          this._stopPolling()
+        }
+      } catch (err) {
+        this._stopPolling()
+        this._exportState = {
+          status: 'error',
+          progress: 0,
+          message: err?.message || 'Failed to poll export status',
+        }
+        this._renderExportState()
+      }
+    }, 500)
+  }
+
+  _stopPolling() {
+    if (this._pollTimer) {
+      clearInterval(this._pollTimer)
+      this._pollTimer = null
+    }
+  }
+
+  _renderExportState() {
+    const body = this._rail.querySelector('#railBody')
+    const cta = this._rail.querySelector('#exportCta')
+    const st = this._exportState
+    if (!body || !cta || !st) return
+
+    const progress = Math.max(0, Math.min(100, Number(st.progress || 0)))
+    const running = st.status === 'queued' || st.status === 'running'
+    const done = st.status === 'done'
+    const errored = st.status === 'error'
+
+    cta.style.display = running ? 'none' : 'block'
+    this._rail.querySelectorAll('.rail-tab').forEach(t => t.classList.toggle('disabled', running))
+
+    body.innerHTML = `
+      <div class="export-progress-wrap">
+        <div class="export-progress-title">${done ? 'Export complete' : errored ? 'Export failed' : 'Exporting MP4'}</div>
+        <div class="export-progress-sub ${errored ? 'is-error' : ''}">
+          ${errored ? (st.message || st.error || 'An unknown export error occurred.') : done ? 'Your video is ready.' : (st.message || 'Rendering and mixing audio...')}
+        </div>
+        <div class="export-progress-track">
+          <div class="export-progress-fill" style="width:${progress}%"></div>
+        </div>
+        <div class="export-progress-percent">${progress}%</div>
+        ${done && st.outputPath ? `<div class="export-output-path">${st.outputPath}</div>` : ''}
+        ${done ? '<button class="export-share-btn" id="exportShareBtn">Share</button>' : ''}
+      </div>
+    `
+
+    const shareBtn = body.querySelector('#exportShareBtn')
+    if (shareBtn) {
+      shareBtn.addEventListener('click', async () => {
+        const path = st.outputPath || ''
+        try {
+          if (navigator.share) {
+            await navigator.share({ title: 'Bubbleforge export', text: path })
+            return
+          }
+          await navigator.clipboard.writeText(path)
+          this._snack('Export path copied to clipboard')
+        } catch {
+          this._snack('Could not share export path')
+        }
+      })
+    }
   }
 
   _snack(msg) {
