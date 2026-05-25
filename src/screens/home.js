@@ -408,6 +408,34 @@ export class HomeScreen {
         push('conversation', { projectId: card.dataset.projectId })
       })
     })
+
+    list.querySelectorAll('.project-rename-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation()
+        const projectId = btn.dataset.projectId
+        const project = store.getProject(projectId)
+        if (!project) return
+        const nextName = window.prompt('Rename story', project.name)
+        if (nextName == null) return
+        const trimmed = nextName.trim()
+        if (!trimmed) return this._snack('Story name cannot be empty.')
+        store.updateProject(projectId, { name: trimmed })
+        this._snack('Story renamed')
+      })
+    })
+
+    list.querySelectorAll('.project-delete-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation()
+        const projectId = btn.dataset.projectId
+        const project = store.getProject(projectId)
+        if (!project) return
+        const ok = window.confirm(`Delete "${project.name}"? This cannot be undone.`)
+        if (!ok) return
+        store.deleteProject(projectId)
+        this._snack('Story deleted')
+      })
+    })
   }
 
   _refreshCharacterList() {
@@ -527,6 +555,10 @@ export class HomeScreen {
       <div class="project-card" data-project-id="${p.id}">
         <div class="project-cover" style="background:${this._coverGradient(colors)};">
           <div class="project-cover-overlay"></div>
+          <div style="position:absolute;top:8px;right:8px;display:flex;gap:6px;z-index:2;">
+            <button class="project-rename-btn" data-project-id="${p.id}" type="button" style="border:0;background:rgba(0,0,0,0.38);color:#fff;border-radius:10px;padding:5px 8px;font-size:11px;cursor:pointer;">Rename</button>
+            <button class="project-delete-btn" data-project-id="${p.id}" type="button" style="border:0;background:rgba(245,0,87,0.65);color:#fff;border-radius:10px;padding:5px 8px;font-size:11px;cursor:pointer;">Delete</button>
+          </div>
           <div class="project-cover-bubbles">${bubbleRows}</div>
         </div>
         <div class="project-info">
