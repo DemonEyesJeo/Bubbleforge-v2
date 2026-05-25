@@ -72,6 +72,7 @@ export class ProjectScreen {
   }
 
   destroy() {
+    this._closeSceneMenu()
     store.off('project-changed', this._onProjectChange)
     store.off('projects-changed', this._onProjectsChange)
   }
@@ -130,21 +131,30 @@ export class ProjectScreen {
     list.innerHTML = scenes.map((scene, i) => {
       const kind = this._sceneKind(scene)
       const kindLabel = kind.charAt(0).toUpperCase() + kind.slice(1)
-      const icon = kind === 'title' ? 'T' : kind === 'quote' ? '❝' : '💬'
       const name = scene?.name?.trim() || (kind === 'title' ? 'Untitled' : kind === 'quote' ? 'Quote' : 'Scene')
+      const messageCount = (scene.messages || []).length
+      const coverRows = this._sceneCoverBubbles(scene, project)
       return `
-        <button class="project-scene-row" data-scene-id="${scene.id}" type="button">
-          <div class="project-scene-icon">${icon}</div>
-          <div class="project-scene-copy">
-            <div class="project-scene-name">${i + 1}. ${name}</div>
-            <div class="project-scene-kind">${kindLabel}</div>
+        <button class="project-card project-scene-card" data-scene-id="${scene.id}" type="button">
+          <div class="project-cover" style="background:${this._coverGradientFromScene(scene, project)};">
+            <div class="project-cover-overlay"></div>
+            <div style="position:absolute;top:8px;right:8px;display:flex;gap:6px;z-index:2;">
+              <button class="project-scene-menu-btn" data-scene-id="${scene.id}" type="button" style="border:0;background:rgba(0,0,0,0.38);color:#fff;border-radius:10px;padding:5px 8px;font-size:11px;cursor:pointer;">•••</button>
+            </div>
+            ${coverRows ? `<div class="project-cover-bubbles">${coverRows}</div>` : '<div class="project-cover-empty">No messages yet</div>'}
           </div>
-          <div class="project-scene-menu">•••</div>
+          <div class="project-info">
+            <div>
+              <div class="project-name">${i + 1}. ${name}</div>
+              <div class="project-meta">${kindLabel} · ${messageCount} message${messageCount === 1 ? '' : 's'}</div>
+            </div>
+            <div class="project-kind-pill">${kindLabel}</div>
+          </div>
         </button>
       `
     }).join('')
 
-    list.querySelectorAll('.project-scene-row').forEach(row => {
+    list.querySelectorAll('.project-scene-card').forEach(row => {
       row.addEventListener('click', () => {
         const sceneId = row.dataset.sceneId
         if (!sceneId) return
@@ -157,5 +167,119 @@ export class ProjectScreen {
         this._refresh()
       })
     })
+
+    list.querySelectorAll('.project-scene-menu-btn').forEach(menuBtn => {
+      menuBtn.addEventListener('click', (e) => {
+        e.stopPropagation()
+        const row = menuBtn.closest('.project-scene-card')
+        const sceneId = row?.dataset.sceneId
+        if (!sceneId) return
+        this._showSceneMenu(sceneId)
+      })
+    })
+  }
+
+  _coverGradientFromScene(scene, project) {
+    const firstMsg = (scene.messages || [])[0]
+    const actor = (project.actors || []).find(a => a.id === firstMsg?.actor_id)
+    const color = actor?.color || '#1a2436'
+    const r = parseInt(color.slice(1, 3), 16)
+    const g = parseInt(color.slice(3, 5), 16)
+    const b = parseInt(color.slice(5, 7), 16)
+    return `linear-gradient(135deg,rgba(${r},${g},${b},0.16),rgba(${r},${g},${b},0.06))`
+  }
+
+  _sceneCoverBubbles(scene, project) {
+    const messages = (scene.messages || []).slice(0, 5)
+    if (!messages.length) return ''
+    const widths = ['58%', '42%', '65%', '48%', '56%']
+    return messages.map((msg, i) => {
+      const actor = (project.actors || []).find(a => a.id === msg.actor_id)
+      const color = actor?.color || '#5f6678'
+      const side = actor?.side === 'right' ? 'margin-left:auto;' : ''
+      const width = widths[i % widths.length]
+      return `<div class="mini-bub" style="width:${width};background:${color};${side}"></div>`
+    }).join('')
+  }
+
+  _showSceneMenu(sceneId) {
+    if (this._sceneMenuOverlay || this._sceneMenuSheet) return
+
+    const project = store.getProject(this.projectId)
+    const scene = store.getScene(this.projectId, sceneId)
+    if (!project || !scene) return
+
+    const overlay = document.createElement('div')
+    overlay.className = 'new-project-overlay'
+
+    const sheet = document.createElement('div')
+    sheet.className = 'new-project-sheet'
+    sheet.innerHTML = `
+      <div class="new-project-handle"></div>
+      <div class="new-project-title">Scene actions</div>
+      <div class="new-project-sub">${scene.name || 'Scene'}</div>
+      <div class="new-project-actions" style="flex-direction:column; margin-top:14px;">
+        <button id="sceneRenameBtn" class="new-project-btn ghost">Rename</button>
+        <button id="sceneDuplicateBtn" class="new-project-btn ghost">Duplicate</button>
+        <button id="sceneDeleteBtn" class="new-project-btn ghost" style="color:var(--danger);">Delete</button>
+        <button id="sceneCloseBtn" class="new-project-btn primary">Done</button>
+      </div>
+    `
+
+    this._sceneMenuOverlay = overlay
+    this._sceneMenuSheet = sheet
+    this._el.appendChild(overlay)
+    this._el.appendChild(sheet)
+
+    const close = () => this._closeSceneMenu()
+    overlay.addEventListener('click', close)
+    sheet.querySelector('#sceneCloseBtn')?.addEventListener('click', close)
+
+    sheet.querySelector('#sceneRenameBtn')?.addEventListener('click', () => {
+      const next = window.prompt('Rename scene', scene.name || '')
+      if (next == null) return
+      const name = next.trim()
+      if (!name) return
+      store.updateScene(this.projectId, sceneId, { name })
+      close()
+    })
+
+    sheet.querySelector('#sceneDuplicateBtn')?.addEventListener('click', () => {
+      const copy = store.duplicateScene(this.projectId, sceneId)
+      if (copy) {
+        store.setActiveScene(this.projectId, copy.id)
+      }
+      close()
+    })
+
+    sheet.querySelector('#sceneDeleteBtn')?.addEventListener('click', () => {
+      const ok = window.confirm(`Delete "${scene.name || 'Scene'}"?`)
+      if (!ok) return
+      const deleted = store.deleteScene(this.projectId, sceneId)
+      if (!deleted) {
+        close()
+        return
+      }
+      close()
+    })
+
+    requestAnimationFrame(() => {
+      overlay.classList.add('visible')
+      sheet.classList.add('visible')
+    })
+  }
+
+  _closeSceneMenu() {
+    if (!this._sceneMenuOverlay || !this._sceneMenuSheet) return
+    const overlay = this._sceneMenuOverlay
+    const sheet = this._sceneMenuSheet
+    overlay.classList.remove('visible')
+    sheet.classList.remove('visible')
+    this._sceneMenuOverlay = null
+    this._sceneMenuSheet = null
+    setTimeout(() => {
+      overlay.remove()
+      sheet.remove()
+    }, 220)
   }
 }

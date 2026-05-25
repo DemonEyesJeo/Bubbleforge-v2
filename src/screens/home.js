@@ -277,6 +277,24 @@ export class HomeScreen {
     }, 220)
   }
 
+  _openProSheet() {
+    this._snack('PRO features coming soon.')
+  }
+
+  _closeProSheet() {
+    if (!this._proOverlay || !this._proSheet) return
+    const overlay = this._proOverlay
+    const sheet = this._proSheet
+    overlay.classList.remove('visible')
+    sheet.classList.remove('visible')
+    this._proOverlay = null
+    this._proSheet = null
+    setTimeout(() => {
+      overlay.remove()
+      sheet.remove()
+    }, 220)
+  }
+
   _openExternal(url, fallbackLabel) {
     try {
       const opened = window.open(url, '_blank', 'noopener,noreferrer')
@@ -538,14 +556,18 @@ export class HomeScreen {
     const header = this._el.querySelector('#homeHeader h1')
     const fab = this._el.querySelector('#newProjectBtn')
     if (header) {
-      header.textContent = tab === 'projects' ? 'My Stories' : tab === 'characters' ? 'Actors' : 'Settings'
+      header.textContent = tab === 'projects' ? 'Projects' : tab === 'characters' ? 'Actors' : 'Settings'
     }
     if (fab) fab.style.display = tab === 'projects' ? 'flex' : 'none'
   }
 
   _cardHTML(p) {
     const colors = p.actors.map(a => a.color)
-    const bubbleRows = this._coverBubbles(p, colors)
+    const stackLayers = Math.max(1, Math.min(3, p.scenes.length || 1))
+    const stack = Array.from({ length: stackLayers }, (_, i) => {
+      const inset = i * 6
+      return `<div class="project-stack-layer" style="inset:${12 + inset}px ${14 + inset}px ${22 + inset}px ${14 + inset}px;"></div>`
+    }).join('')
     const pips = p.actors.slice(0, 4).map((a, i) =>
       `<div class="actor-pip" style="background:${a.color};z-index:${10-i};">${a.name[0]}</div>`
     ).join('')
@@ -561,7 +583,8 @@ export class HomeScreen {
             <button class="project-rename-btn" data-project-id="${p.id}" type="button" style="border:0;background:rgba(0,0,0,0.38);color:#fff;border-radius:10px;padding:5px 8px;font-size:11px;cursor:pointer;">Rename</button>
             <button class="project-delete-btn" data-project-id="${p.id}" type="button" style="border:0;background:rgba(245,0,87,0.65);color:#fff;border-radius:10px;padding:5px 8px;font-size:11px;cursor:pointer;">Delete</button>
           </div>
-          <div class="project-cover-bubbles">${bubbleRows}</div>
+          <div class="project-cover-stack" aria-hidden="true">${stack}</div>
+          <div class="project-stack-count">${p.scenes.length}</div>
         </div>
         <div class="project-info">
           <div>
@@ -571,15 +594,6 @@ export class HomeScreen {
           <div class="actor-pips">${pips}</div>
         </div>
       </div>`
-  }
-
-  _coverBubbles(p, colors) {
-    if (!colors.length) return ''
-    const widths = ['55%','42%','60%','38%','50%']
-    const sides  = ['right','left','right','left','right']
-    return p.actors.slice(0,3).flatMap((a, i) => [
-      `<div class="mini-bub" style="width:${widths[i]};background:${a.color};${a.side === 'right' ? 'margin-left:auto;' : ''}"></div>`,
-    ]).slice(0, 3).join('')
   }
 
   _coverGradient(colors) {
