@@ -30,6 +30,7 @@ export function renderMessages(messages, actors, options = {}) {
 
     for (let i = 0; i < group.messages.length; i++) {
       const msg = group.messages[i]
+      const textValue = String(msg.text || '')
       const isFirst = i === 0
       const isLast  = i === group.messages.length - 1
       const isSolo  = group.messages.length === 1
@@ -72,7 +73,7 @@ export function renderMessages(messages, actors, options = {}) {
                  title="${escHtml(msg.text)}">
               ${msg.media ? `<img class="bubble-media" src="${escAttr(msg.media)}" alt="attachment" />` : ''}
               ${msg.audio ? `<audio class="bubble-audio" controls src="${escAttr(msg.audio)}"></audio>` : ''}
-              <div class="bubble-text">${escHtml(msg.text)}</div>
+                ${textValue ? `<div class="bubble-text">${escHtml(textValue)}</div>` : ''}
               ${msg.reaction ? `<div class="bubble-reaction" aria-label="Reaction">${escHtml(msg.reaction)}</div>` : ''}
             </div>
             ${tsEl}
