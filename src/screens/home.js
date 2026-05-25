@@ -5,6 +5,7 @@ import { icons, statusIcons } from '../components/icons.js'
 export class HomeScreen {
   constructor() {
     this._onChange = () => this._refreshList()
+    this._activeTab = 'projects'
   }
 
   render() {
@@ -14,15 +15,74 @@ export class HomeScreen {
         <span class="time">9:41</span>
         ${statusIcons()}
       </div>
-      <div class="home-header">
-        <h1>My Stories</h1>
-        <div class="fab" id="newProjectBtn">${icons.add}</div>
+      <div class="home-body" id="homeBody">
+        <div class="home-header" id="homeHeader">
+          <h1>My Stories</h1>
+          <div class="fab" id="newProjectBtn">${icons.add}</div>
+        </div>
+        <div class="home-pane-wrap">
+          <div class="home-pane active" data-pane="projects">
+            <div class="search-bar">
+              ${icons.search}
+              <span style="color:var(--t3);font-size:14px;">Search stories…</span>
+            </div>
+            <div class="scroll-body" id="projectList" style="padding-bottom:24px;"></div>
+          </div>
+          <div class="home-pane" data-pane="characters">
+            <div class="home-pane-title">Actors</div>
+            <div class="home-pane-sub">All actors across your stories</div>
+            <div class="scroll-body" id="characterList" style="padding-bottom:24px;"></div>
+          </div>
+          <div class="home-pane" data-pane="settings">
+            <div class="home-pane-title">Settings</div>
+            <div class="home-pane-sub">App preferences and support</div>
+            <div class="home-settings-list">
+              <div class="home-setting-row">
+                <div>
+                  <div class="home-setting-title">Email</div>
+                  <div class="home-setting-sub">Contact support</div>
+                </div>
+                <div class="home-setting-pill">Open</div>
+              </div>
+              <div class="home-setting-row muted">
+                <div>
+                  <div class="home-setting-title">TikTok</div>
+                  <div class="home-setting-sub">Coming soon</div>
+                </div>
+                <div class="home-setting-pill ghost">Soon</div>
+              </div>
+              <div class="home-setting-row muted">
+                <div>
+                  <div class="home-setting-title">X / Twitter</div>
+                  <div class="home-setting-sub">Coming soon</div>
+                </div>
+                <div class="home-setting-pill ghost">Soon</div>
+              </div>
+              <div class="home-setting-row">
+                <div>
+                  <div class="home-setting-title">Credits & licenses</div>
+                  <div class="home-setting-sub">Assets and third-party notices</div>
+                </div>
+                <div class="home-setting-pill">Open</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="search-bar">
-        ${icons.search}
-        <span style="color:var(--t3);font-size:14px;">Search stories…</span>
-      </div>
-      <div class="scroll-body" id="projectList" style="padding-bottom:32px;"></div>`
+      <div class="home-bottom-nav">
+        <div class="home-nav-item active" data-tab="projects">
+          <div class="home-nav-icon">${icons.folder}</div>
+          <div class="home-nav-label">Projects</div>
+        </div>
+        <div class="home-nav-item" data-tab="characters">
+          <div class="home-nav-icon">${icons.actors}</div>
+          <div class="home-nav-label">Actors</div>
+        </div>
+        <div class="home-nav-item" data-tab="settings">
+          <div class="home-nav-icon">${icons.settings}</div>
+          <div class="home-nav-label">Settings</div>
+        </div>
+      </div>`
     return el
   }
 
@@ -30,12 +90,20 @@ export class HomeScreen {
     this._el.querySelector('#newProjectBtn').addEventListener('click', () => {
       this._openCreateProjectSheet()
     })
+    this._el.querySelectorAll('.home-nav-item').forEach(item => {
+      item.addEventListener('click', () => this._switchTab(item.dataset.tab))
+    })
     store.on('projects-changed', this._onChange)
     this._refreshList()
+    this._refreshCharacterList()
+    this._refreshSettingsPane()
+    this._switchTab(this._activeTab)
   }
 
   resume() {
     this._refreshList()
+    this._refreshCharacterList()
+    this._refreshSettingsPane()
   }
 
   destroy() {
@@ -107,6 +175,7 @@ export class HomeScreen {
 
   _refreshList() {
     const list = this._el.querySelector('#projectList')
+    if (!list) return
     const projects = store.getProjects()
 
     if (!projects.length) {
@@ -126,6 +195,80 @@ export class HomeScreen {
         push('conversation', { projectId: card.dataset.projectId })
       })
     })
+  }
+
+  _refreshCharacterList() {
+    const list = this._el.querySelector('#characterList')
+    if (!list) return
+
+    const rows = []
+    for (const project of store.getProjects()) {
+      for (const actor of project.actors || []) {
+        rows.push({ project, actor })
+      }
+    }
+
+    if (!rows.length) {
+      list.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">👥</div>
+          <p>No actors yet.<br>Create a project first.</p>
+        </div>`
+      return
+    }
+
+    list.innerHTML = rows.map(({ project, actor }) => {
+      const sideLabel = actor.side === 'right' ? 'Right side' : 'Left side'
+      return `
+        <div class="home-actor-row" data-project-id="${project.id}" data-actor-id="${actor.id}">
+          <div class="home-actor-avatar" style="background:${actor.color};">${actor.name[0]}</div>
+          <div class="home-actor-copy">
+            <div class="home-actor-name">${actor.name}</div>
+            <div class="home-actor-sub">${project.name} · ${sideLabel}</div>
+          </div>
+          <div class="home-actor-arrow">›</div>
+        </div>`
+    }).join('')
+
+    list.querySelectorAll('.home-actor-row').forEach(row => {
+      row.addEventListener('click', () => {
+        push('actor-editor', {
+          projectId: row.dataset.projectId,
+          actorId: row.dataset.actorId,
+        })
+      })
+    })
+  }
+
+  _refreshSettingsPane() {
+    const body = this._el.querySelector('.home-settings-list')
+    if (!body) return
+    body.querySelectorAll('.home-setting-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const title = row.querySelector('.home-setting-title')?.textContent || ''
+        if (title === 'Email') {
+          this._snack('Support email is not wired yet in v2.')
+        } else if (title === 'Credits & licenses') {
+          this._snack('Credits panel is not wired yet in v2.')
+        }
+      })
+    })
+  }
+
+  _switchTab(tab) {
+    this._activeTab = tab
+    this._el.querySelectorAll('.home-nav-item').forEach(item => {
+      item.classList.toggle('active', item.dataset.tab === tab)
+    })
+    this._el.querySelectorAll('.home-pane').forEach(pane => {
+      pane.classList.toggle('active', pane.dataset.pane === tab)
+    })
+    const header = this._el.querySelector('#homeHeader h1')
+    const fab = this._el.querySelector('#newProjectBtn')
+    if (header) {
+      header.textContent = tab === 'projects' ? 'My Stories' : tab === 'characters' ? 'Actors' : 'Settings'
+    }
+    if (fab) fab.style.display = tab === 'projects' ? 'flex' : 'none'
   }
 
   _cardHTML(p) {
@@ -170,6 +313,18 @@ export class HomeScreen {
     const g = parseInt(c.slice(3,5),16)
     const b = parseInt(c.slice(5,7),16)
     return `linear-gradient(135deg,rgba(${r},${g},${b},0.15),rgba(${r},${g},${b},0.06))`
+  }
+
+  _snack(msg) {
+    const s = document.createElement('div')
+    s.className = 'snackbar'
+    s.textContent = msg
+    this._el.appendChild(s)
+    setTimeout(() => {
+      s.style.opacity = '0'
+      s.style.transition = 'opacity 0.25s'
+      setTimeout(() => s.remove(), 280)
+    }, 2200)
   }
 
   _relativeTime(ts) {
