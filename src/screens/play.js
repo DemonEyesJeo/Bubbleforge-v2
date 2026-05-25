@@ -101,19 +101,24 @@ export class PlayScreen {
 
     const track = this._el.querySelector('#progressTrack')
     let scrubbing = false
+    let resumeAfterScrub = false
 
     const applyScrub = (clientX) => {
       const rect = track.getBoundingClientRect()
       if (!rect.width) return
       const frac = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
-      const target = Math.max(0, Math.min(this._msgQueue.length, Math.round(frac * this._msgQueue.length)))
-      this._msgIndex = target
-      this._shownMessages = this._msgQueue.slice(0, target)
+      const targetMs = this._totalMs * frac
+      const target = this._timelineMs.findIndex(ms => ms > targetMs)
+      const nextIndex = target < 0 ? this._msgQueue.length : target
+
+      this._msgIndex = nextIndex
+      this._shownMessages = this._msgQueue.slice(0, nextIndex)
+      this._playheadMs = targetMs
       this._renderCanvas(p, scene, this._shownMessages)
       this._setGhostText('')
 
       this._el.querySelector('#progressFill').style.width = `${frac * 100}%`
-      this._el.querySelector('#timeCurrent').textContent = this._formatTime((this._totalMs * frac) / 1000)
+      this._el.querySelector('#timeCurrent').textContent = this._formatTime(targetMs / 1000)
     }
 
     const onPointerMove = (e) => {
@@ -124,13 +129,16 @@ export class PlayScreen {
       if (!scrubbing) return
       applyScrub(e.clientX)
       scrubbing = false
+      if (resumeAfterScrub) {
+        this._startPlayback(p, scene, rs)
+      }
+      resumeAfterScrub = false
     }
     const onPointerDown = (e) => {
-      const wasPlaying = this._playing
+      resumeAfterScrub = this._playing
       this._pausePlayback()
       scrubbing = true
       applyScrub(e.clientX)
-      if (wasPlaying) this._startPlayback(p, scene, rs)
     }
 
     track.addEventListener('pointerdown', onPointerDown)
