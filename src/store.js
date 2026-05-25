@@ -291,8 +291,8 @@ class Store {
 
   deleteActor(projectId, actorId) {
     const p = this.getProject(projectId)
-    if (!p) return
-    if ((p.actors || []).length <= 1) return
+    if (!p) return false
+    if ((p.actors || []).length <= 1) return false
     this._snapshot()
     const remaining = p.actors.filter(a => a.id !== actorId)
     const fallbackActorId = remaining[0]?.id || null
@@ -309,6 +309,7 @@ class Store {
     p.updated_at = now()
     this._save()
     this._emit('project-changed', projectId)
+    return true
   }
 
   // ── Render settings ──────────────────────────

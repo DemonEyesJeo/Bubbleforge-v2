@@ -137,9 +137,25 @@ export class ActorEditorScreen {
     })
 
     this._el.querySelector('#deleteBtn')?.addEventListener('click', () => {
-      store.deleteActor(this.projectId, this.actorId)
-      pop()
+      const deleted = store.deleteActor(this.projectId, this.actorId)
+      if (deleted) {
+        pop()
+      } else {
+        this._snack('At least one actor is required.')
+      }
     })
+  }
+
+  _snack(msg) {
+    const s = document.createElement('div')
+    s.className = 'snackbar'
+    s.textContent = msg
+    this._el.appendChild(s)
+    setTimeout(() => {
+      s.style.opacity = '0'
+      s.style.transition = 'opacity 0.25s'
+      setTimeout(() => s.remove(), 280)
+    }, 2200)
   }
 
   _updatePreview() {
