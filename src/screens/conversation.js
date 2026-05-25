@@ -668,6 +668,7 @@ export class ConversationScreen {
     }
 
     const audio = this._composeMusicAudio
+    audio.loop = musicLoop
     audio.volume = musicVolume
     const duration = Number.isFinite(audio.duration) ? audio.duration : 0.1
     const current = Number.isFinite(audio.currentTime) ? audio.currentTime : 0
