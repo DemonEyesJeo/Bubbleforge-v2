@@ -184,11 +184,47 @@ export class ConversationScreen {
       input.focus()
     })
     menu.querySelector('[data-action="actor"]').addEventListener('click', () => {
-      const actorEl = this._el.querySelector(`[data-actor-id="${bub.dataset.actorId}"]`)
+      this._showActorPicker(bub, p, scene, msgId)
       menu.remove()
     })
 
     setTimeout(() => document.addEventListener('click', () => menu.remove(), { once: true }), 50)
+  }
+
+  _showActorPicker(bub, p, scene, msgId) {
+    document.querySelectorAll('.bubble-menu').forEach(m => m.remove())
+    const message = scene.messages.find(m => m.id === msgId)
+    if (!message) return
+
+    const picker = document.createElement('div')
+    picker.className = 'bubble-menu actor-picker fade-in'
+    picker.innerHTML = p.actors.map(actor => {
+      const active = actor.id === message.actor_id
+      return `
+        <div class="bubble-menu-item actor-option ${active ? 'active' : ''}" data-actor-id="${actor.id}">
+          <span class="actor-dot" style="background:${actor.color}"></span>
+          <span>${actor.name}</span>
+        </div>`
+    }).join('')
+
+    const rect = bub.getBoundingClientRect()
+    const appRect = document.getElementById('app').getBoundingClientRect()
+    picker.style.position = 'absolute'
+    picker.style.top = `${rect.top - appRect.top - 10}px`
+    picker.style.left = bub.closest('.msg-row.right')
+      ? `${rect.left - appRect.left - 180 + rect.width}px`
+      : `${rect.left - appRect.left}px`
+    picker.style.zIndex = '500'
+    document.getElementById('app').appendChild(picker)
+
+    picker.querySelectorAll('.actor-option').forEach(opt => {
+      opt.addEventListener('click', () => {
+        store.updateMessage(this.projectId, scene.id, msgId, { actor_id: opt.dataset.actorId })
+        picker.remove()
+      })
+    })
+
+    setTimeout(() => document.addEventListener('click', () => picker.remove(), { once: true }), 50)
   }
 
   _send() {
