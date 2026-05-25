@@ -26,6 +26,7 @@ function defaultRenderSettings() {
     music_volume: 0.7,
     loop_music: true,
     fade_music: true,
+    music_title: '',
     resolution: '1080p',
     format: 'mp4',
     preview_before_export: false,

@@ -23,6 +23,7 @@ export class ConversationScreen {
     this._composeMusicAudio = null
     this._composeMusicRaf = null
     this._composeMusicUrl = ''
+    this._composeMusicTitle = ''
     this._onChange = () => this._refresh()
   }
 
@@ -556,6 +557,7 @@ export class ConversationScreen {
   _setComposeMusicSource(url, title) {
     this._stopComposeMusic()
     this._composeMusicUrl = url || ''
+    this._composeMusicTitle = title || ''
     if (!url) {
       this._syncComposeMusicTools()
       return
@@ -580,7 +582,7 @@ export class ConversationScreen {
     const seek = this._el?.querySelector('#composeMusicSeek')
     const playBtn = this._el?.querySelector('#composeMusicPlayBtn')
     const rewindBtn = this._el?.querySelector('#composeMusicRewindBtn')
-    const url = this._composeMusicUrl || rs.music_path || ''
+    const url = rs.music_path || this._composeMusicUrl || ''
     const musicTitle = rs.music_title || this._composeMusicTitle || (url ? 'Selected audio' : 'No audio selected')
 
     if (title) title.textContent = musicTitle
@@ -661,6 +663,7 @@ export class ConversationScreen {
     } catch {}
     this._composeMusicAudio = null
     this._composeMusicUrl = ''
+    this._composeMusicTitle = ''
   }
 
   _playPendingAudio() {
