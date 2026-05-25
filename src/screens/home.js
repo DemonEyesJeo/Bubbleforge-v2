@@ -5,6 +5,8 @@ import { icons, statusIcons } from '../components/icons.js'
 export class HomeScreen {
   constructor() {
     this._supportEmail = 'jeovan.flete@protonmail.com'
+    this._tiktokUrl = 'https://www.tiktok.com/@bubbleforgeapp'
+    this._xUrl = 'https://x.com/bubbleforgeapp'
     this._onChange = () => this._refreshList()
     this._activeTab = 'projects'
     this._characterSort = 'name'
@@ -286,6 +288,15 @@ export class HomeScreen {
     }
   }
 
+  _openExternal(url, fallbackLabel) {
+    try {
+      const opened = window.open(url, '_blank', 'noopener,noreferrer')
+      if (!opened) this._snack(`Open: ${fallbackLabel}`)
+    } catch {
+      this._snack(`Open: ${fallbackLabel}`)
+    }
+  }
+
   _openGroupsSheet() {
     if (this._groupsOverlay) return
 
@@ -461,9 +472,9 @@ export class HomeScreen {
         if (title === 'Email') {
           this._openSupportEmail()
         } else if (title === 'TikTok') {
-          this._snack('TikTok link is coming soon.')
+          this._openExternal(this._tiktokUrl, this._tiktokUrl)
         } else if (title === 'X / Twitter') {
-          this._snack('X / Twitter link is coming soon.')
+          this._openExternal(this._xUrl, this._xUrl)
         } else if (title === 'Restore purchases') {
           this._snack('Restore purchases is coming soon.')
         } else if (title === 'Credits & licenses') {
