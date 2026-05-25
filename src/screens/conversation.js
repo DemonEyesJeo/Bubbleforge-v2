@@ -1,7 +1,7 @@
 import { store } from '../store.js'
 import { push, pop } from '../router.js'
 import { icons } from '../components/icons.js'
-import { renderMessages, renderTypingIndicator } from '../components/bubble.js'
+import { renderMessages, renderTypingIndicator, hexToRgb } from '../components/bubble.js'
 import { HubPanel } from '../components/hub-panel.js'
 import { ExportRail } from '../components/export-rail.js'
 import { renderStatusBar } from '../components/status-bar.js'
@@ -27,6 +27,7 @@ export class ConversationScreen {
     this._composeMusicRaf = null
     this._composeMusicUrl = ''
     this._composeMusicTitle = ''
+    this._speakerphoneEnabled = false
     this._onChange = () => this._refresh()
   }
 
@@ -103,18 +104,18 @@ export class ConversationScreen {
         </div>
         <div class="compose-row">
           <div class="nav-btn" id="audioToggleBtn" title="Audio">${icons.music}</div>
-          <textarea class="compose-input" id="composeInput" rows="1" placeholder="Message…"></textarea>
-          <div class="compose-count" id="composeCount">0 / 160</div>
-          <div class="nav-btn" id="emojiBtn" title="Emoji">${icons.emoji}</div>
-            <input id="composeMusicInput" type="file" accept="audio/*" hidden />
+          <div class="compose-pill" id="composePill">
+            <div class="compose-emoji-btn" id="emojiBtn" title="Emoji">${icons.emoji}</div>
+            <textarea class="compose-input" id="composeInput" rows="1" placeholder="Message…"></textarea>
+            <div class="compose-count" id="composeCount">0/160</div>
+            <div class="compose-pill-action" id="cameraBtn" title="Camera">${icons.camera}</div>
+          </div>
+          <div class="send-btn" id="sendBtn">${icons.add}</div>
+          <input id="composeMusicInput" type="file" accept="audio/*" hidden />
           <input id="composeAudioInput" type="file" accept="audio/*" hidden />
           <input id="composeCameraInput" type="file" accept="image/*" capture="environment" hidden />
           <input id="composeMediaInput" type="file" accept="image/*" hidden />
           <div class="nav-btn" id="cancelEditBtn" title="Cancel edit" style="display:none;">✕</div>
-          <div class="nav-btn" id="cameraBtn" title="Camera">${icons.camera}</div>
-          <div class="nav-btn" id="mediaBtn" title="Attach image">${icons.image}</div>
-          <div class="nav-btn" id="exportBtn" title="Export">${icons.export}</div>
-          <div class="send-btn" id="sendBtn">${icons.send}</div>
         </div>
       </div>`
     return el
@@ -131,7 +132,6 @@ export class ConversationScreen {
       push('play', { projectId: this.projectId })
     })
     this._el.querySelector('#menuBtn').addEventListener('click', () => this._openHub())
-    this._el.querySelector('#exportBtn').addEventListener('click', () => this._openExport())
     this._el.querySelector('#audioToggleBtn').addEventListener('click', () => this._toggleAudioPill())
     this._el.querySelector('#composeMusicPickBtn').addEventListener('click', () => this._el.querySelector('#composeMusicInput')?.click())
     this._el.querySelector('#composeMusicPlayBtn').addEventListener('click', () => this._toggleComposeMusicPlay())
@@ -143,7 +143,6 @@ export class ConversationScreen {
     this._el.querySelector('#audioAttachBtn').addEventListener('click', () => this._el.querySelector('#composeAudioInput')?.click())
     this._el.querySelector('#audioRecordBtn').addEventListener('click', () => this._toggleAudioRecording())
     this._el.querySelector('#cameraBtn').addEventListener('click', () => this._el.querySelector('#composeCameraInput')?.click())
-    this._el.querySelector('#mediaBtn').addEventListener('click', () => this._el.querySelector('#composeMediaInput')?.click())
     this._el.querySelector('#composeMusicInput').addEventListener('change', e => this._pickComposeMusic(e.target))
     this._el.querySelector('#composeAudioInput').addEventListener('change', e => this._pickComposeAudio(e.target))
     this._el.querySelector('#composeCameraInput').addEventListener('change', e => this._pickComposeMedia(e.target))
@@ -187,7 +186,13 @@ export class ConversationScreen {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this._send() }
     })
 
-    sendBtn.addEventListener('click', () => this._send())
+    sendBtn.addEventListener('click', () => {
+      if (sendBtn.dataset.mode === 'send') {
+        this._send()
+      } else {
+        this._el.querySelector('#composeMediaInput')?.click()
+      }
+    })
 
     this._refresh()
     this._syncSendReady()
@@ -238,26 +243,41 @@ export class ConversationScreen {
 
   _renderSpeakerStrip(p) {
     const strip = this._el.querySelector('#speakerStrip')
-    strip.innerHTML = p.actors.map(a => {
+    const chips = p.actors.map(a => {
       const active = a.id === this._activeActorId
       const rgb = this._rgb(a.color)
-      const avatarStyle = a.avatar
-        ? `background-image:url('${a.avatar.replace(/'/g, '%27')}');background-size:cover;background-position:center;${active ? `box-shadow:0 0 0 1.5px rgba(${rgb},0.4);` : ''}`
-        : `background:${a.color};${active ? `box-shadow:0 0 0 1.5px rgba(${rgb},0.4);` : ''}`
       return `
         <div class="speaker-chip ${active ? 'active' : ''}" data-actor-id="${a.id}">
-          <div class="chip-avatar" style="${avatarStyle}">${a.avatar ? '' : a.name[0]}</div>
+          <div class="chip-avatar" style="background:${a.color};${active ? `box-shadow:0 0 0 1.5px rgba(${rgb},0.6);` : ''}">${(a.name || '?')[0]}</div>
           <span class="chip-name">${a.name}</span>
         </div>`
     }).join('')
+    strip.innerHTML = `
+      <div class="speaker-mega-btn ${this._speakerphoneEnabled ? 'active' : ''}" id="speakerphoneBtn" title="Speakerphone">📣</div>
+      <div class="speaker-strip-divider"></div>
+      ${chips}
+      <div class="speaker-add-chip" id="addActorChip" title="Add actor">+</div>
+    `
+
+    strip.querySelector('#speakerphoneBtn')?.addEventListener('click', () => {
+      this._speakerphoneEnabled = !this._speakerphoneEnabled
+      this._renderSpeakerStrip(p)
+    })
+
+    strip.querySelector('#addActorChip')?.addEventListener('click', () => {
+      push('actor-editor', { projectId: this.projectId, actorId: null })
+    })
 
     strip.querySelectorAll('.speaker-chip').forEach(chip => {
       chip.addEventListener('click', () => {
         this._activeActorId = chip.dataset.actorId
         this._renderSpeakerStrip(p)
+        this._syncComposePillBorder(p)
         this._el.querySelector('#composeInput').focus()
       })
     })
+
+    this._syncComposePillBorder(p)
   }
 
   _renderCanvas(p, scene) {
@@ -491,9 +511,9 @@ export class ConversationScreen {
     const sendBtn = this._el?.querySelector('#sendBtn')
     if (!input || !sendBtn) return
     const hasText = input.value.trim().length > 0
-    const hasAttachment = Boolean(this._composePendingMedia || this._composePendingAudio)
-    const canSend = this._editingMsgId ? hasText : (hasText || hasAttachment)
-    sendBtn.classList.toggle('ready', canSend)
+    sendBtn.dataset.mode = hasText ? 'send' : 'add'
+    sendBtn.innerHTML = hasText ? icons.send : icons.add
+    sendBtn.classList.toggle('ready', hasText)
   }
 
   _enterEditMode(sceneId, msgId, text) {
@@ -624,8 +644,17 @@ export class ConversationScreen {
     }
 
     const length = field.value.length
-    label.textContent = `${length} / ${limit}`
+    label.textContent = `${length}/${limit}`
     label.classList.toggle('warn', length >= Math.floor(limit * 0.8))
+  }
+
+  _syncComposePillBorder(p = store.getProject(this.projectId)) {
+    const pill = this._el?.querySelector('#composePill')
+    if (!pill || !p) return
+    const actor = (p.actors || []).find(a => a.id === this._activeActorId) || p.actors?.[0]
+    if (!actor?.color) return
+    const rgb = hexToRgb(actor.color)
+    pill.style.border = `1px solid rgba(${rgb},0.50)`
   }
 
   _pickComposeMedia(input) {
