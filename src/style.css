@@ -1321,6 +1321,37 @@ body {
 .play-canvas.is-light {
   background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
 }
+.conversation-screen.is-light,
+.play-screen.is-light {
+  background: linear-gradient(180deg, #f5f4f0 0%, #ece9e2 100%);
+}
+.conversation-screen.is-light .status-bar,
+.conversation-screen.is-light .nav-bar,
+.conversation-screen.is-light .command-center,
+.play-screen.is-light .status-bar,
+.play-screen.is-light .play-controls {
+  background: rgba(255,255,255,0.84);
+  border-color: rgba(0,0,0,0.08);
+}
+.conversation-screen.is-light .scene-divider-rule.left,
+.conversation-screen.is-light .scene-divider-rule.right {
+  background: linear-gradient(90deg, transparent, rgba(0,0,0,0.08));
+}
+.conversation-screen.is-light .scene-divider-rule.right {
+  background: linear-gradient(270deg, transparent, rgba(0,0,0,0.08));
+}
+.conversation-screen.is-light .scene-divider-label,
+.play-screen.is-light .scene-divider-label,
+.conversation-screen.is-light .msg-timestamp,
+.play-screen.is-light .msg-timestamp {
+  color: rgba(0,0,0,0.46);
+}
+.conversation-screen.is-light .bubble.left,
+.play-screen.is-light .bubble.left,
+.conversation-screen.is-light .typing-bubble,
+.play-screen.is-light .typing-bubble {
+  color: rgba(0,0,0,0.82);
+}
 .side-picker { display: flex; gap: 8px; padding: 12px 20px 0; }
 .side-opt {
   flex: 1; padding: 11px; border-radius: 12px; text-align: center;
@@ -1334,6 +1365,7 @@ body {
    PLAY PREVIEW
    ══════════════════════════════════════ */
 .play-screen { background: #000; }
+.play-screen.is-light { background: linear-gradient(180deg, #f5f4f0 0%, #ece9e2 100%); }
 
 .play-canvas {
   flex: 1; overflow-y: auto; overflow-x: hidden;

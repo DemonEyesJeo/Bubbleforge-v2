@@ -60,6 +60,8 @@ export class PlayScreen {
     this._msgQueue = scene?.messages || []
     this._shownMessages = []
 
+    this._applyTheme(rs)
+
     // Set up keyboard overlay
     if (rs.keyboard_style !== 'off' && rs.keyboard_style) {
       this._kb = new KeyboardOverlay(
@@ -152,6 +154,7 @@ export class PlayScreen {
     const canvas = this._el.querySelector('#playCanvas')
     const actorMap = Object.fromEntries(p.actors.map(a => [a.id, a]))
     const rs = p.render_settings || {}
+    this._applyTheme(rs)
     canvas.classList.toggle('is-light', rs.dark_background === false)
 
     let html = `
@@ -312,5 +315,14 @@ export class PlayScreen {
     const m = Math.floor(secs / 60)
     const s = Math.floor(secs % 60)
     return `${m}:${String(s).padStart(2,'0')}`
+  }
+
+  _applyTheme(rs) {
+    const light = rs?.dark_background === false
+    this._el.classList.toggle('is-light', light)
+    const status = this._el.querySelector('.status-bar')
+    const controls = this._el.querySelector('.play-controls')
+    if (status) status.style.background = light ? 'rgba(255,255,255,0.84)' : '#000'
+    if (controls) controls.style.background = light ? 'rgba(255,255,255,0.84)' : 'rgba(8,8,8,0.96)'
   }
 }

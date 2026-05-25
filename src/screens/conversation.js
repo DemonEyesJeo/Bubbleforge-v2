@@ -31,6 +31,7 @@ export class ConversationScreen {
 
   render() {
     const el = document.createElement('div')
+    el.className = 'conversation-screen'
     el.innerHTML = `
       <div class="status-bar">
         <span class="time">9:41</span>
@@ -246,6 +247,7 @@ export class ConversationScreen {
       return
     }
     const rs = p.render_settings || {}
+    this._el.classList.toggle('is-light', rs.dark_background === false)
     canvas.classList.toggle('is-light', rs.dark_background === false)
 
     const sceneHeader = `
