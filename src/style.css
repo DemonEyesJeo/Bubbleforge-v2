@@ -631,6 +631,16 @@ body {
 }
 .compose-input:focus { border-color: rgba(41,121,255,0.4); }
 .compose-input::placeholder { color: var(--t3); }
+.compose-count {
+  flex-shrink: 0;
+  min-width: 44px;
+  text-align: center;
+  color: var(--t3);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.compose-count.warn { color: rgba(255, 166, 77, 0.95); }
 .send-btn {
   width: 38px; height: 38px; border-radius: 50%;
   background: var(--accent-g);

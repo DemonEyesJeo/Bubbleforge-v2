@@ -13,6 +13,7 @@ export class ConversationScreen {
     this._exportRail = null
     this._audioToolsOpen = false
     this._composePendingMedia = ''
+    this._composeCharLimit = 160
     this._bubbleLongPressTimer = null
     this._bubbleLongPressSuppressedMsgId = null
     this._onChange = () => this._refresh()
@@ -58,6 +59,7 @@ export class ConversationScreen {
         <div class="compose-row">
           <div class="nav-btn" id="audioToggleBtn" title="Audio">${icons.music}</div>
           <textarea class="compose-input" id="composeInput" rows="1" placeholder="Message…"></textarea>
+          <div class="compose-count" id="composeCount">0 / 160</div>
           <div class="nav-btn" id="emojiBtn" title="Emoji">${icons.emoji}</div>
           <input id="composeMediaInput" type="file" accept="image/*" hidden />
           <div class="nav-btn" id="mediaBtn" title="Attach image">${icons.image}</div>
@@ -102,6 +104,7 @@ export class ConversationScreen {
     const sendBtn = this._el.querySelector('#sendBtn')
 
     input.addEventListener('input', () => {
+      this._syncComposeCharCount(input)
       sendBtn.classList.toggle('ready', input.value.trim().length > 0)
       input.style.height = 'auto'
       input.style.height = Math.min(input.scrollHeight, 100) + 'px'
@@ -385,6 +388,25 @@ export class ConversationScreen {
     if (pill) pill.classList.toggle('open', this._audioToolsOpen)
     if (sub) sub.textContent = this._audioToolsOpen ? 'Ready for voice and media tools' : 'Hidden while typing'
     this._syncComposeMediaPreview()
+  }
+
+  _syncComposeCharCount(input) {
+    const field = input || this._el.querySelector('#composeInput')
+    const label = this._el.querySelector('#composeCount')
+    if (!field || !label) return
+
+    const limit = this._composeCharLimit
+    if (field.value.length > limit) {
+      const start = field.selectionStart ?? limit
+      const end = field.selectionEnd ?? limit
+      field.value = field.value.slice(0, limit)
+      const nextPos = Math.min(limit, start)
+      field.setSelectionRange(nextPos, Math.min(limit, end))
+    }
+
+    const length = field.value.length
+    label.textContent = `${length} / ${limit}`
+    label.classList.toggle('warn', length >= Math.floor(limit * 0.8))
   }
 
   _pickComposeMedia(input) {
