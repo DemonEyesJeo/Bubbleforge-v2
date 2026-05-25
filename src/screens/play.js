@@ -90,10 +90,12 @@ export class PlayScreen {
     const typingDur = (rs.typing_duration || 0.08) * 1000
     const indicatorDur = (rs.typing_indicator_duration || 1.2) * 1000
     const pauseDur = (rs.message_pause || 0.8) * 1000
+    const typingEnabled = rs.typing_animation !== false
     let totalMs = 0
     this._timelineMs = []
     for (const msg of this._msgQueue) {
-      totalMs += indicatorDur + msg.text.length * typingDur + pauseDur
+      const typingCost = typingEnabled ? msg.text.length * typingDur : 0
+      totalMs += indicatorDur + typingCost + pauseDur
       this._timelineMs.push(totalMs)
     }
     this._totalMs = totalMs || 10000
@@ -233,6 +235,7 @@ export class PlayScreen {
     const indicMs  = (rs.typing_indicator_duration || 1.2) * 1000
     const pauseMs  = (rs.message_pause || 0.8) * 1000
     const fakeout  = rs.fakeout !== false
+    const typingEnabled = rs.typing_animation !== false
 
     const canvas = this._el.querySelector('#playCanvas')
 
@@ -267,12 +270,31 @@ export class PlayScreen {
           this._playheadMs += (rs.typing_indicator_gap || 0.4) * 1000
           setProgress()
           showTyping()
-          this._animTimeout = setTimeout(() => this._typeMessage(p, scene, rs, msg, actor, typingMs, pauseMs), indicMs * 0.6)
+          this._animTimeout = setTimeout(() => {
+            if (typingEnabled) this._typeMessage(p, scene, rs, msg, actor, typingMs, pauseMs)
+            else this._commitMessage(p, scene, rs, msg, pauseMs)
+          }, indicMs * 0.6)
         }, (rs.typing_indicator_gap || 0.4) * 1000)
       } else {
-        this._typeMessage(p, scene, rs, msg, actor, typingMs, pauseMs)
+        if (typingEnabled) this._typeMessage(p, scene, rs, msg, actor, typingMs, pauseMs)
+        else this._commitMessage(p, scene, rs, msg, pauseMs)
       }
     }, indicMs)
+  }
+
+  _commitMessage(p, scene, rs, msg, pauseMs) {
+    this._setGhostText('')
+    this._shownMessages.push(msg)
+    this._msgIndex++
+    this._renderCanvas(p, scene, this._shownMessages)
+
+    this._playheadMs += pauseMs
+    const pct = Math.max(0, Math.min(1, this._playheadMs / this._totalMs))
+    this._el.querySelector('#progressFill').style.width = `${pct * 100}%`
+    this._el.querySelector('#timeCurrent').textContent = this._formatTime(this._playheadMs / 1000)
+
+    this._kb?.hide()
+    this._animTimeout = setTimeout(() => this._runNext(p, scene, rs), pauseMs)
   }
 
   _typeMessage(p, scene, rs, msg, actor, typingMs, pauseMs) {
@@ -287,19 +309,7 @@ export class PlayScreen {
     const typeNext = () => {
       if (!this._playing) return
       if (charIdx >= chars.length) {
-        // Message complete — show full bubble
-        this._setGhostText('')
-        this._shownMessages.push(msg)
-        this._msgIndex++
-        this._renderCanvas(p, scene, this._shownMessages)
-
-        this._playheadMs += pauseMs
-        const pct = Math.max(0, Math.min(1, this._playheadMs / this._totalMs))
-        this._el.querySelector('#progressFill').style.width = `${pct * 100}%`
-        this._el.querySelector('#timeCurrent').textContent = this._formatTime(this._playheadMs / 1000)
-
-        this._kb?.hide()
-        this._animTimeout = setTimeout(() => this._runNext(p, scene, rs), pauseMs)
+        this._commitMessage(p, scene, rs, msg, pauseMs)
         return
       }
 
