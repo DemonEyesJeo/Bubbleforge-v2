@@ -121,6 +121,27 @@ export class HubPanel {
           push('actor-editor', { projectId: this.projectId, actorId: aid })
         })
       })
+      body.querySelectorAll('[data-actor-reorder]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation()
+          const actorId = btn.dataset.actorId
+          const direction = Number(btn.dataset.actorReorder)
+          if (!actorId || Number.isNaN(direction) || btn.disabled) return
+          store.reorderActor(this.projectId, actorId, direction)
+          this._renderTab('actors')
+        })
+      })
+      body.querySelectorAll('[data-actor-side-toggle]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation()
+          const actorId = btn.dataset.actorId
+          const currentSide = btn.dataset.actorSide || 'left'
+          if (!actorId) return
+          const newSide = currentSide === 'left' ? 'right' : 'left'
+          store.updateActor(this.projectId, actorId, { side: newSide })
+          this._renderTab('actors')
+        })
+      })
       body.querySelector('#addActorBtn')?.addEventListener('click', () => {
         this.dismiss()
         push('actor-editor', { projectId: this.projectId, actorId: null })
@@ -182,17 +203,28 @@ export class HubPanel {
   }
 
   _actorsTab(p) {
-    const rows = p.actors.map(a => {
+    const lastIdx = (p.actors?.length || 1) - 1
+    const rows = p.actors.map((a, idx) => {
       const rgb = this._rgb(a.color)
       const badge = a.side === 'right'
         ? `<span class="actor-side-badge" style="background:rgba(${rgb},0.12);color:${a.color};">YOU</span>`
         : `<span class="actor-side-badge" style="background:var(--s2);color:var(--t3);">THEM</span>`
+      const upDisabled = idx === 0
+      const downDisabled = idx === lastIdx
       return `
         <div class="hub-list-item actor-list-item" data-actor-id="${a.id}">
           <div class="avatar" style="width:38px;height:38px;font-size:14px;background:${a.color};box-shadow:0 0 0 2px rgba(${rgb},0.3);">${a.name[0]}</div>
           <div class="hub-list-text">
             <div class="hub-list-title">${a.name}</div>
             <div class="hub-list-sub">${a.side === 'right' ? 'Right side' : 'Left side'}</div>
+          </div>
+          <button class="actor-side-toggle" type="button" data-actor-side-toggle="1" data-actor-id="${a.id}" data-actor-side="${a.side}">
+            <span class="actor-side-pill ${a.side === 'left' ? 'active' : ''}">◀ Left</span>
+            <span class="actor-side-pill ${a.side === 'right' ? 'active' : ''}">Right ▶</span>
+          </button>
+          <div class="actor-reorder" role="group" aria-label="Reorder actor">
+            <button class="actor-reorder-btn" type="button" data-actor-reorder="-1" data-actor-id="${a.id}" ${upDisabled ? 'disabled' : ''} aria-label="Move actor up">▲</button>
+            <button class="actor-reorder-btn" type="button" data-actor-reorder="1" data-actor-id="${a.id}" ${downDisabled ? 'disabled' : ''} aria-label="Move actor down">▼</button>
           </div>
           ${badge}
         </div>`

@@ -501,6 +501,21 @@ class Store {
     this._emit('project-changed', projectId)
   }
 
+  reorderActor(projectId, actorId, direction) {
+    const p = this.getProject(projectId)
+    if (!p) return
+    const idx = p.actors.findIndex(a => a.id === actorId)
+    const newIdx = idx + direction
+    if (idx < 0 || newIdx < 0 || newIdx >= p.actors.length) return
+    this._snapshot()
+    const actors = [...p.actors]
+    ;[actors[idx], actors[newIdx]] = [actors[newIdx], actors[idx]]
+    p.actors = actors
+    p.updated_at = Date.now()
+    this._save()
+    this._emit('project-changed', projectId)
+  }
+
   deleteActor(projectId, actorId) {
     const p = this.getProject(projectId)
     if (!p) return false

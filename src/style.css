@@ -1268,6 +1268,51 @@ body {
   text-transform: uppercase; padding: 3px 8px; border-radius: 6px;
 }
 
+.actor-side-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--s2);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.actor-side-pill {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--t3);
+  padding: 3px 7px;
+  border-radius: 999px;
+}
+.actor-side-pill.active {
+  color: #fff;
+  background: rgba(41,121,255,0.24);
+}
+
+.actor-reorder {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.actor-reorder-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--s2);
+  color: var(--t2);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+}
+.actor-reorder-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 /* ══════════════════════════════════════
    EXPORT RAIL
    ══════════════════════════════════════ */
