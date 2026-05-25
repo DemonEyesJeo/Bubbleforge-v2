@@ -498,6 +498,34 @@ body {
   text-align: center;
 }
 
+.credits-sheet {
+  max-height: 84%;
+}
+.credits-list {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.credits-card {
+  padding: 12px 13px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--s1);
+}
+.credits-card-title {
+  color: var(--t1);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+.credits-card-sub {
+  margin-top: 4px;
+  color: var(--t2);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 /* ══════════════════════════════════════
    CONVERSATION SCREEN
    ══════════════════════════════════════ */

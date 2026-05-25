@@ -147,6 +147,7 @@ export class HomeScreen {
 
   destroy() {
     this._closeCreateProjectSheet()
+    this._closeCreditsSheet()
     store.off('projects-changed', this._onChange)
   }
 
@@ -206,6 +207,66 @@ export class HomeScreen {
     sheet.classList.remove('visible')
     this._createOverlay = null
     this._createSheet = null
+    setTimeout(() => {
+      overlay.remove()
+      sheet.remove()
+    }, 220)
+  }
+
+  _openCreditsSheet() {
+    if (this._creditsOverlay) return
+
+    const overlay = document.createElement('div')
+    overlay.className = 'new-project-overlay'
+
+    const sheet = document.createElement('div')
+    sheet.className = 'new-project-sheet credits-sheet'
+    sheet.innerHTML = `
+      <div class="new-project-handle"></div>
+      <div class="new-project-title">Credits & licenses</div>
+      <div class="new-project-sub">Libraries and runtime pieces used by Bubbleforge v2.</div>
+      <div class="credits-list">
+        <div class="credits-card">
+          <div class="credits-card-title">Frontend</div>
+          <div class="credits-card-sub">Vite, Capacitor Core, Capacitor Android, Capacitor Filesystem, Capacitor Share</div>
+        </div>
+        <div class="credits-card">
+          <div class="credits-card-title">Backend</div>
+          <div class="credits-card-sub">Flask, flask-cors, Pillow, moviepy</div>
+        </div>
+        <div class="credits-card">
+          <div class="credits-card-title">Assets</div>
+          <div class="credits-card-sub">Keyboard SFX, story fonts, and bundled media are distributed with the app build</div>
+        </div>
+      </div>
+      <div class="new-project-actions">
+        <button id="closeCreditsBtn" class="new-project-btn primary">Done</button>
+      </div>
+    `
+
+    this._creditsOverlay = overlay
+    this._creditsSheet = sheet
+    this._el.appendChild(overlay)
+    this._el.appendChild(sheet)
+
+    const close = () => this._closeCreditsSheet()
+    overlay.addEventListener('click', close)
+    sheet.querySelector('#closeCreditsBtn').addEventListener('click', close)
+
+    requestAnimationFrame(() => {
+      overlay.classList.add('visible')
+      sheet.classList.add('visible')
+    })
+  }
+
+  _closeCreditsSheet() {
+    if (!this._creditsOverlay || !this._creditsSheet) return
+    const overlay = this._creditsOverlay
+    const sheet = this._creditsSheet
+    overlay.classList.remove('visible')
+    sheet.classList.remove('visible')
+    this._creditsOverlay = null
+    this._creditsSheet = null
     setTimeout(() => {
       overlay.remove()
       sheet.remove()
@@ -379,7 +440,7 @@ export class HomeScreen {
         if (title === 'Email') {
           this._snack('Support email is not wired yet in v2.')
         } else if (title === 'Credits & licenses') {
-          this._snack('Credits panel is not wired yet in v2.')
+          this._openCreditsSheet()
         } else if (title === 'Upgrade to PRO') {
           this._snack('PRO upgrade is not wired yet in v2.')
         }
