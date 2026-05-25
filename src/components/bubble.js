@@ -59,7 +59,8 @@ export function renderMessages(messages, actors, onBubbleTap) {
                  data-msg-id="${msg.id}"
                  data-actor-id="${actor.id}"
                  title="${escHtml(msg.text)}">
-              ${escHtml(msg.text)}
+              <div class="bubble-text">${escHtml(msg.text)}</div>
+              ${msg.reaction ? `<div class="bubble-reaction" aria-label="Reaction">${escHtml(msg.reaction)}</div>` : ''}
             </div>
           </div>
         </div>`

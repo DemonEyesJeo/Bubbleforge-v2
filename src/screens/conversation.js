@@ -12,6 +12,8 @@ export class ConversationScreen {
     this._hub = null
     this._exportRail = null
     this._audioToolsOpen = false
+    this._bubbleLongPressTimer = null
+    this._bubbleLongPressSuppressedMsgId = null
     this._onChange = () => this._refresh()
   }
 
@@ -114,6 +116,7 @@ export class ConversationScreen {
     store.off('project-changed', this._onChange)
     this._hub?.dismiss()
     this._exportRail?.dismiss()
+    this._endBubblePress()
   }
 
   _refresh() {
@@ -180,11 +183,37 @@ export class ConversationScreen {
 
     // Bubble tap → context menu
     canvas.querySelectorAll('.bubble').forEach(bub => {
+      const msgId = bub.dataset.msgId
+      bub.addEventListener('pointerdown', e => this._beginBubblePress(e, bub, p, scene, msgId))
+      bub.addEventListener('pointerup', () => this._endBubblePress())
+      bub.addEventListener('pointercancel', () => this._endBubblePress())
+      bub.addEventListener('pointerleave', () => this._endBubblePress())
       bub.addEventListener('click', (e) => {
         e.stopPropagation()
+        if (this._bubbleLongPressSuppressedMsgId === msgId) {
+          this._bubbleLongPressSuppressedMsgId = null
+          return
+        }
         this._showBubbleMenu(bub, p, scene)
       })
     })
+  }
+
+  _beginBubblePress(e, bub, p, scene, msgId) {
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    this._endBubblePress()
+    this._bubbleLongPressTimer = window.setTimeout(() => {
+      this._bubbleLongPressTimer = null
+      this._bubbleLongPressSuppressedMsgId = msgId
+      this._showReactionPicker(bub, p, scene, msgId)
+    }, 320)
+  }
+
+  _endBubblePress() {
+    if (this._bubbleLongPressTimer) {
+      clearTimeout(this._bubbleLongPressTimer)
+      this._bubbleLongPressTimer = null
+    }
   }
 
   _showBubbleMenu(bub, p, scene) {
@@ -259,6 +288,48 @@ export class ConversationScreen {
     picker.querySelectorAll('.actor-option').forEach(opt => {
       opt.addEventListener('click', () => {
         store.updateMessage(this.projectId, scene.id, msgId, { actor_id: opt.dataset.actorId })
+        picker.remove()
+      })
+    })
+
+    setTimeout(() => document.addEventListener('click', () => picker.remove(), { once: true }), 50)
+  }
+
+  _showReactionPicker(bub, p, scene, msgId) {
+    document.querySelectorAll('.bubble-menu').forEach(m => m.remove())
+    const message = scene.messages.find(m => m.id === msgId)
+    if (!message) return
+
+    const picker = document.createElement('div')
+    picker.className = 'bubble-menu emoji-menu reaction-menu fade-in'
+    const emojis = ['❤️', '😂', '😮', '😢', '🔥', '👏']
+    picker.innerHTML = emojis.map(emoji => {
+      const active = message.reaction === emoji
+      return `<div class="emoji-item ${active ? 'active' : ''}" data-emoji="${emoji}">${emoji}</div>`
+    }).join('')
+
+    const rect = bub.getBoundingClientRect()
+    const appRect = document.getElementById('app').getBoundingClientRect()
+    const width = 214
+    const height = 86
+    const isRight = !!bub.closest('.msg-row.right')
+    const left = isRight
+      ? Math.max(10, Math.min(rect.right - appRect.left - width, appRect.width - width - 10))
+      : Math.max(10, Math.min(rect.left - appRect.left, appRect.width - width - 10))
+    const below = rect.bottom - appRect.top + 10
+    const above = rect.top - appRect.top - height - 10
+    const top = above > 10 ? above : below
+
+    picker.style.position = 'absolute'
+    picker.style.left = `${left}px`
+    picker.style.top = `${Math.max(10, top)}px`
+    picker.style.zIndex = '520'
+    document.getElementById('app').appendChild(picker)
+
+    picker.querySelectorAll('.emoji-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const nextReaction = message.reaction === item.dataset.emoji ? null : item.dataset.emoji
+        store.updateMessage(this.projectId, scene.id, msgId, { reaction: nextReaction })
         picker.remove()
       })
     })

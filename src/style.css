@@ -727,6 +727,10 @@ body {
   min-width: 220px;
   padding: 8px;
 }
+.reaction-menu {
+  min-width: 214px;
+  grid-template-columns: repeat(6, 1fr);
+}
 .emoji-item {
   font-size: 18px;
   width: 36px;
@@ -738,6 +742,20 @@ body {
   cursor: pointer;
 }
 .emoji-item:hover { background: var(--s2); }
+.emoji-item.active { background: rgba(41,121,255,0.16); }
+.bubble-text { white-space: pre-wrap; }
+.bubble-reaction {
+  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.14);
+  font-size: 12px;
+  line-height: 1;
+}
 .bubble-menu-item.actor-option {
   display: flex;
   align-items: center;
