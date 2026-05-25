@@ -54,26 +54,26 @@ export class HomeScreen {
                 </div>
                 <div class="home-setting-pill">Open</div>
               </div>
-              <div class="home-setting-row muted">
+              <div class="home-setting-row">
                 <div>
                   <div class="home-setting-title">TikTok</div>
-                  <div class="home-setting-sub">Coming soon</div>
+                  <div class="home-setting-sub">Follow Bubbleforge updates</div>
                 </div>
-                <div class="home-setting-pill ghost">Soon</div>
+                <div class="home-setting-pill">Open</div>
               </div>
-              <div class="home-setting-row muted">
+              <div class="home-setting-row">
                 <div>
                   <div class="home-setting-title">X / Twitter</div>
-                  <div class="home-setting-sub">Coming soon</div>
+                  <div class="home-setting-sub">Follow Bubbleforge updates</div>
                 </div>
-                <div class="home-setting-pill ghost">Soon</div>
+                <div class="home-setting-pill">Open</div>
               </div>
-              <div class="home-setting-row muted">
+              <div class="home-setting-row">
                 <div>
                   <div class="home-setting-title">Restore purchases</div>
-                  <div class="home-setting-sub">Coming soon</div>
+                  <div class="home-setting-sub">Request restoration support</div>
                 </div>
-                <div class="home-setting-pill ghost">Soon</div>
+                <div class="home-setting-pill">Open</div>
               </div>
               <div class="home-setting-row">
                 <div>
