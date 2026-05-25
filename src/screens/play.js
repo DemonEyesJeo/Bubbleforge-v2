@@ -5,6 +5,8 @@ import { renderMessages, renderTypingIndicator } from '../components/bubble.js'
 import { KeyboardOverlay } from '../components/keyboard.js'
 import { renderStatusBar } from '../components/status-bar.js'
 
+const FAKEOUT_PROB = 0.35
+
 export class PlayScreen {
   constructor({ projectId }) {
     this.projectId = projectId
@@ -94,7 +96,7 @@ export class PlayScreen {
     for (let i = 0; i < this._msgQueue.length; i++) {
       const msg = this._msgQueue[i]
       const msgText = String(msg?.text || '')
-      const fakeoutCost = fakeoutEnabled && i > 0 ? (indicatorGapDur + indicatorDur * 0.6) : 0
+      const fakeoutCost = fakeoutEnabled && i > 0 ? (indicatorGapDur + indicatorDur * 0.6) * FAKEOUT_PROB : 0
       const typingCost = typingEnabled ? msgText.length * typingDur : 0
       totalMs += indicatorDur + fakeoutCost + typingCost + pauseDur
       this._timelineMs.push(totalMs)
@@ -220,7 +222,7 @@ export class PlayScreen {
     for (let i = 0; i < this._msgQueue.length; i++) {
       const msg = this._msgQueue[i]
       const text = String(msg?.text || '')
-      const fakeoutCost = fakeoutEnabled && i > 0 ? (indicatorGapDur + indicatorDur * 0.6) : 0
+      const fakeoutCost = fakeoutEnabled && i > 0 ? (indicatorGapDur + indicatorDur * 0.6) * FAKEOUT_PROB : 0
       const typingCost = typingEnabled ? text.length * typingDur : 0
       const segment = indicatorDur + fakeoutCost + typingCost + pauseDur
       const segmentEnd = elapsed + segment
@@ -380,7 +382,7 @@ export class PlayScreen {
       this._playheadMs += indicMs
       setProgress()
 
-      if (fakeout && this._msgIndex > 0 && Math.random() < 0.35) {
+      if (fakeout && this._msgIndex > 0 && Math.random() < FAKEOUT_PROB) {
         // Fakeout: hide briefly, show again
         hideTyping()
         this._animTimeout = setTimeout(() => {
