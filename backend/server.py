@@ -12,6 +12,7 @@ from typing import Any, Dict, Tuple
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from PIL import Image, ImageDraw, ImageFont
+from werkzeug.utils import secure_filename
 
 from core import Message, Project, export_mp4
 
@@ -19,6 +20,7 @@ app = Flask(__name__)
 CORS(app)
 
 jobs = {}  # job_id -> status dict
+UPLOADS_DIR = Path(__file__).resolve().parent / 'uploads'
 
 
 def _safe_int(v: Any, fallback: int) -> int:
@@ -197,6 +199,26 @@ def _project_from_frontend(payload: Dict[str, Any]) -> Tuple[Project, Tuple[int,
 @app.route('/api/health', methods=['GET'])
 def health():
     return jsonify({'status': 'ok', 'version': '2.0.0'})
+
+
+@app.route('/api/music-upload', methods=['POST'])
+def music_upload():
+    file = request.files.get('music')
+    if file is None:
+        return jsonify({'error': 'No music file provided'}), 400
+    if not file.filename:
+        return jsonify({'error': 'Empty filename'}), 400
+
+    safe_name = secure_filename(file.filename)
+    suffix = Path(safe_name).suffix.lower()
+    if suffix not in {'.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac'}:
+        return jsonify({'error': 'Unsupported audio format'}), 400
+
+    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    out_name = f"{uuid.uuid4().hex}{suffix}"
+    out_path = UPLOADS_DIR / out_name
+    file.save(out_path)
+    return jsonify({'path': str(out_path), 'name': safe_name})
 
 @app.route('/api/export', methods=['POST'])
 def export():

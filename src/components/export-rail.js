@@ -126,6 +126,10 @@ export class ExportRail {
   }
 
   _bindInteractions(body, tab) {
+    if (tab === 'audio') {
+      body.querySelector('#pickMusicBtn')?.addEventListener('click', () => this._pickMusicFile())
+    }
+
     body.querySelectorAll('.pill').forEach(pill => {
       pill.addEventListener('click', () => {
         pill.closest('.pill-row').querySelectorAll('.pill').forEach(p => p.classList.remove('active'))
@@ -179,6 +183,36 @@ export class ExportRail {
       window.addEventListener('mouseup', () => dragging = false)
       window.addEventListener('touchend', () => dragging = false)
     })
+  }
+
+  async _pickMusicFile() {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'audio/*,.mp3,.wav,.ogg,.m4a,.flac,.aac'
+
+    input.addEventListener('change', async () => {
+      const file = input.files?.[0]
+      if (!file) return
+
+      this._snack('Uploading music…')
+      try {
+        const fd = new FormData()
+        fd.append('music', file)
+        const resp = await fetch('/api/music-upload', { method: 'POST', body: fd })
+        const data = await resp.json()
+        if (!resp.ok || !data?.path) {
+          throw new Error(data?.error || 'Upload failed')
+        }
+
+        store.updateRenderSettings(this.projectId, { music_path: data.path })
+        this._renderTab('audio')
+        this._snack(`Music selected: ${data.name || file.name}`)
+      } catch (err) {
+        this._snack(err?.message || 'Could not upload music file')
+      }
+    }, { once: true })
+
+    input.click()
   }
 
   _mappers = {}
