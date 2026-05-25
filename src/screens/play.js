@@ -104,7 +104,7 @@ export class PlayScreen {
       this._timelineMs.push(totalMs)
     }
     this._totalMs = totalMs || 10000
-    this._el.querySelector('#timeTotal').textContent = this._formatTime(totalMs / 1000)
+    this._el.querySelector('#timeTotal').textContent = this._formatTime(this._totalMs / 1000)
 
     const track = this._el.querySelector('#progressTrack')
     let scrubbing = false
