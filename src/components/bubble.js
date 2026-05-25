@@ -16,10 +16,15 @@ export function renderMessages(messages, actors, options = {}) {
   const actorMap = Object.fromEntries(actors.map(a => [a.id, a]))
   const groups = groupMessages(messages)
   let html = ''
+  const fallbackActor = {
+    id: '__unknown__',
+    name: 'Unknown',
+    side: 'left',
+    color: '#7D8085',
+  }
 
   for (const group of groups) {
-    const actor = actorMap[group.actor_id]
-    if (!actor) continue
+    const actor = actorMap[group.actor_id] || fallbackActor
     const isRight = actor.side === 'right'
     const colorRgb = hexToRgb(actor.color)
 
@@ -40,7 +45,7 @@ export function renderMessages(messages, actors, options = {}) {
       const showName   = showNames && (isFirst || isSolo)
 
       const avatarEl = showAvatar
-        ? `<div class="avatar" style="background:${actor.color};box-shadow:0 0 0 2px rgba(${colorRgb},0.32);">${actor.name[0].toUpperCase()}</div>`
+        ? `<div class="avatar" style="background:${actor.color};box-shadow:0 0 0 2px rgba(${colorRgb},0.32);">${(actor.name?.[0] || '?').toUpperCase()}</div>`
         : `<div class="avatar ghost"></div>`
 
       const nameEl = showName
