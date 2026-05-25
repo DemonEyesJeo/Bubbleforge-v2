@@ -7,6 +7,7 @@ export class HomeScreen {
     this._onChange = () => this._refreshList()
     this._activeTab = 'projects'
     this._characterSort = 'name'
+    this._searchQuery = ''
   }
 
   render() {
@@ -25,7 +26,7 @@ export class HomeScreen {
           <div class="home-pane active" data-pane="projects">
             <div class="search-bar">
               ${icons.search}
-              <span style="color:var(--t3);font-size:14px;">Search stories…</span>
+              <input id="homeSearchInput" class="home-search-input" type="text" placeholder="Search stories…" value="" />
             </div>
             <div class="scroll-body" id="projectList" style="padding-bottom:24px;"></div>
           </div>
@@ -110,6 +111,11 @@ export class HomeScreen {
   bind() {
     this._el.querySelector('#newProjectBtn').addEventListener('click', () => {
       this._openCreateProjectSheet()
+    })
+    this._el.querySelector('#homeSearchInput')?.addEventListener('input', e => {
+      this._searchQuery = e.target.value || ''
+      this._refreshList()
+      this._refreshCharacterList()
     })
     this._el.querySelectorAll('.home-nav-item').forEach(item => {
       item.addEventListener('click', () => this._switchTab(item.dataset.tab))
@@ -209,7 +215,12 @@ export class HomeScreen {
   _refreshList() {
     const list = this._el.querySelector('#projectList')
     if (!list) return
-    const projects = store.getProjects()
+    const query = this._searchQuery.trim().toLowerCase()
+    const projects = store.getProjects().filter(p => {
+      if (!query) return true
+      const actorText = (p.actors || []).map(a => `${a.name} ${a.side}`).join(' ')
+      return `${p.name} ${actorText}`.toLowerCase().includes(query)
+    })
 
     if (!projects.length) {
       list.innerHTML = `
@@ -237,6 +248,8 @@ export class HomeScreen {
     const rows = []
     for (const project of store.getProjects()) {
       for (const actor of project.actors || []) {
+        const query = this._searchQuery.trim().toLowerCase()
+        if (query && !`${project.name} ${actor.name} ${actor.side}`.toLowerCase().includes(query)) continue
         rows.push({ project, actor })
       }
     }
