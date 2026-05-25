@@ -198,13 +198,14 @@ class Store {
 
   deleteScene(projectId, sceneId) {
     const p = this.getProject(projectId)
-    if (!p || p.scenes.length <= 1) return
+    if (!p || p.scenes.length <= 1) return false
     this._snapshot()
     p.scenes = p.scenes.filter(s => s.id !== sceneId)
     if (p.active_scene_id === sceneId) p.active_scene_id = p.scenes[0].id
     p.updated_at = now()
     this._save()
     this._emit('project-changed', projectId)
+    return true
   }
 
   setActiveScene(projectId, sceneId) {

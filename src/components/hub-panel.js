@@ -186,9 +186,26 @@ export class HubPanel {
       this.dismiss()
     })
     body.querySelector('#deleteSceneBtn')?.addEventListener('click', () => {
-      store.deleteScene(this.projectId, scene.id)
-      this.dismiss()
+      const deleted = store.deleteScene(this.projectId, scene.id)
+      if (deleted) {
+        this.dismiss()
+      } else {
+        this._snack('At least one scene is required.')
+      }
     })
+  }
+
+  _snack(msg) {
+    const s = document.createElement('div')
+    s.className = 'snackbar'
+    s.textContent = msg
+    this.overlayLayer.appendChild(s)
+    this.overlayLayer.style.pointerEvents = 'all'
+    setTimeout(() => {
+      s.style.opacity = '0'
+      s.style.transition = 'opacity 0.25s'
+      setTimeout(() => s.remove(), 280)
+    }, 2200)
   }
 
   _scriptTab(p) {
