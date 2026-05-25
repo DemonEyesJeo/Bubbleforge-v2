@@ -24,13 +24,47 @@ const BUILTIN_STATUS_TEMPLATES = [
   { id: 'builtin-holonet', emoji: '⚡', name: 'HoloNet', status_bar: { time: '9:41', carrier: 'HoloNet', network: 'IMPERIAL', signal: '3bar', wifi: 'medium', battery: 'full', icons: ['work_focus'] } },
 ]
 
+const BUILTIN_TEMPLATE_CATEGORIES = {
+  'builtin-late-night': 'night',
+  'builtin-last-message': 'night',
+  'builtin-woke-up': 'night',
+  'builtin-taking-off': 'travel',
+  'builtin-stranded': 'travel',
+  'builtin-running': 'travel',
+  'builtin-underground': 'travel',
+  'builtin-work-phone': 'work',
+  'builtin-on-record': 'work',
+  'builtin-left-read': 'drama',
+  'builtin-dnd': 'drama',
+  'builtin-anonymous': 'drama',
+  'builtin-gringotts': 'sci-fi',
+  'builtin-holonet': 'sci-fi',
+  'builtin-emergency': 'special',
+  'builtin-party': 'special',
+  'builtin-lazy-sunday': 'special',
+  'builtin-driving': 'special',
+}
+
 export class HubPanel {
   constructor(overlayLayer, projectId, onClose) {
     this.overlayLayer = overlayLayer
     this.projectId = projectId
     this.onClose = onClose
     this.activeTab = 'actors'
+    this._statusTemplateCategory = 'all'
+    this._statusActiveZone = 'left'
+    this._statusZoneOpen = { left: true, center: true, right: true }
+    this._statusDraft = null
+    this._statusSceneId = null
+    this._suppressProjectRender = false
     this._el = null
+    this._dragActorId = ''
+    this._onProjectChange = (changedProjectId) => {
+      if (changedProjectId && changedProjectId !== this.projectId) return
+      if (!this._panel?.isConnected) return
+      if (this._suppressProjectRender) return
+      this._renderTab(this.activeTab)
+    }
   }
 
   mount() {
@@ -40,6 +74,7 @@ export class HubPanel {
     this._panel   = el.children[1]
     this.overlayLayer.appendChild(this._overlay)
     this.overlayLayer.appendChild(this._panel)
+    store.on('project-changed', this._onProjectChange)
     this.overlayLayer.style.pointerEvents = 'all'
     this._overlay.style.pointerEvents = 'all'
     this._bind()
@@ -50,6 +85,7 @@ export class HubPanel {
   }
 
   dismiss() {
+    store.off('project-changed', this._onProjectChange)
     this._overlay.classList.remove('visible')
     this._panel.classList.remove('visible')
     setTimeout(() => {
@@ -68,6 +104,7 @@ export class HubPanel {
     <div class="hub-rail-btn active" data-tab="actors">${icons.actors}</div>
     <div class="hub-rail-btn" data-tab="scene">${icons.scene}</div>
     <div class="hub-rail-btn" data-tab="script" title="Scenes" aria-label="Scenes">${icons.script}</div>
+    <div class="hub-rail-btn" data-tab="status" title="Status" aria-label="Status"><span class="hub-rail-glyph">▤</span></div>
     <div class="hub-rail-btn" data-tab="settings">${icons.settings}</div>
     <div style="flex:1;"></div>
     <div class="hub-rail-btn" id="hubClose">${icons.close}</div>
@@ -95,6 +132,10 @@ export class HubPanel {
 
   _setTab(tab) {
     this.activeTab = tab
+    if (tab !== 'status') {
+      this._statusDraft = null
+      this._statusSceneId = null
+    }
     this._panel.querySelectorAll('.hub-rail-btn[data-tab]').forEach(b => {
       b.classList.toggle('active', b.dataset.tab === tab)
     })
@@ -120,26 +161,49 @@ export class HubPanel {
           this.dismiss()
           push('actor-editor', { projectId: this.projectId, actorId: aid })
         })
-      })
-      body.querySelectorAll('[data-actor-reorder]').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation()
-          const actorId = btn.dataset.actorId
-          const direction = Number(btn.dataset.actorReorder)
-          if (!actorId || Number.isNaN(direction) || btn.disabled) return
-          store.reorderActor(this.projectId, actorId, direction)
+        row.addEventListener('dragstart', (e) => {
+          const actorId = row.dataset.actorId
+          if (!actorId) return
+          this._dragActorId = actorId
+          row.classList.add('dragging')
+          if (e.dataTransfer) {
+            e.dataTransfer.effectAllowed = 'move'
+            e.dataTransfer.setData('text/plain', actorId)
+          }
+        })
+        row.addEventListener('dragend', () => {
+          this._dragActorId = ''
+          body.querySelectorAll('.actor-list-item').forEach(item => {
+            item.classList.remove('actor-drag-over')
+            item.classList.remove('dragging')
+          })
+        })
+        row.addEventListener('dragover', (e) => {
+          e.preventDefault()
+          if (!this._dragActorId || this._dragActorId === row.dataset.actorId) return
+          row.classList.add('actor-drag-over')
+          if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+        })
+        row.addEventListener('dragleave', () => {
+          row.classList.remove('actor-drag-over')
+        })
+        row.addEventListener('drop', (e) => {
+          e.preventDefault()
+          row.classList.remove('actor-drag-over')
+          const dragged = this._dragActorId || e.dataTransfer?.getData('text/plain') || ''
+          const target = row.dataset.actorId || ''
+          if (!dragged || !target || dragged === target) return
+          this._moveActorToTarget(dragged, target)
           this._renderTab('actors')
         })
       })
-      body.querySelectorAll('[data-actor-side-toggle]').forEach(btn => {
+      body.querySelectorAll('[data-actor-edit]').forEach(btn => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation()
           const actorId = btn.dataset.actorId
-          const currentSide = btn.dataset.actorSide || 'left'
           if (!actorId) return
-          const newSide = currentSide === 'left' ? 'right' : 'left'
-          store.updateActor(this.projectId, actorId, { side: newSide })
-          this._renderTab('actors')
+          this.dismiss()
+          push('actor-editor', { projectId: this.projectId, actorId })
         })
       })
       body.querySelector('#addActorBtn')?.addEventListener('click', () => {
@@ -186,6 +250,11 @@ export class HubPanel {
           this._snack('This scene is already empty.')
         }
       })
+    } else if (tab === 'status') {
+      title.textContent = 'Status'
+      sub.textContent = scene?.name || ''
+      body.innerHTML = this._statusTab(p, scene)
+      this._bindStatusTab(body, scene)
     } else if (tab === 'settings') {
       title.textContent = 'Settings'
       sub.textContent = p.name
@@ -203,30 +272,21 @@ export class HubPanel {
   }
 
   _actorsTab(p) {
-    const lastIdx = (p.actors?.length || 1) - 1
-    const rows = p.actors.map((a, idx) => {
+    const rows = p.actors.map(a => {
       const rgb = this._rgb(a.color)
-      const badge = a.side === 'right'
-        ? `<span class="actor-side-badge" style="background:rgba(${rgb},0.12);color:${a.color};">YOU</span>`
-        : `<span class="actor-side-badge" style="background:var(--s2);color:var(--t3);">THEM</span>`
-      const upDisabled = idx === 0
-      const downDisabled = idx === lastIdx
       return `
-        <div class="hub-list-item actor-list-item" data-actor-id="${a.id}">
+        <div class="hub-list-item actor-list-item" data-actor-id="${a.id}" draggable="true">
           <div class="avatar" style="width:38px;height:38px;font-size:14px;background:${a.color};box-shadow:0 0 0 2px rgba(${rgb},0.3);">${a.name[0]}</div>
           <div class="hub-list-text">
             <div class="hub-list-title">${a.name}</div>
             <div class="hub-list-sub">${a.side === 'right' ? 'Right side' : 'Left side'}</div>
           </div>
-          <button class="actor-side-toggle" type="button" data-actor-side-toggle="1" data-actor-id="${a.id}" data-actor-side="${a.side}">
-            <span class="actor-side-pill ${a.side === 'left' ? 'active' : ''}">◀ Left</span>
-            <span class="actor-side-pill ${a.side === 'right' ? 'active' : ''}">Right ▶</span>
+          <button class="actor-control-btn actor-edit-btn" type="button" data-actor-edit="1" data-actor-id="${a.id}" title="Edit actor">
+            ${icons.edit}
           </button>
-          <div class="actor-reorder" role="group" aria-label="Reorder actor">
-            <button class="actor-reorder-btn" type="button" data-actor-reorder="-1" data-actor-id="${a.id}" ${upDisabled ? 'disabled' : ''} aria-label="Move actor up">▲</button>
-            <button class="actor-reorder-btn" type="button" data-actor-reorder="1" data-actor-id="${a.id}" ${downDisabled ? 'disabled' : ''} aria-label="Move actor down">▼</button>
+          <div class="actor-drag-handle" title="Drag to reorder" aria-label="Drag to reorder">
+            ${icons.dragHandle}
           </div>
-          ${badge}
         </div>`
     }).join('')
     return rows + `
@@ -238,10 +298,17 @@ export class HubPanel {
       </div>`
   }
 
+  _moveActorToTarget(draggedId, targetId) {
+    const project = store.getProject(this.projectId)
+    const actors = project?.actors || []
+    const from = actors.findIndex(a => a.id === draggedId)
+    const to = actors.findIndex(a => a.id === targetId)
+    if (from < 0 || to < 0 || from === to) return
+    store.reorderActor(this.projectId, draggedId, to)
+  }
+
   _sceneTab(p, scene) {
     if (!scene) return '<p style="padding:20px;color:var(--t3);">No scene selected.</p>'
-    const status = store.getSceneStatusBar(this.projectId, scene.id)
-    const quick = store.getStatusQuickpicks()
     const actorColorRows = (p.actors || []).map(actor => {
       const effective = store.getEffectiveActor(this.projectId, scene.id, actor.id)
       const overrideColor = scene?.actor_overrides?.[actor.id]?.color
@@ -270,66 +337,7 @@ export class HubPanel {
         ${actorColorRows}
       </div>
       <div class="btn-primary" id="saveSceneBtn" style="margin-top:4px;">Save Scene</div>
-      ${p.scenes.length > 1 ? `<div class="btn-danger" id="deleteSceneBtn">Delete Scene</div>` : ''}
-      <div class="status-editor-wrap">
-        <button class="status-editor-head" id="statusToggleBtn" type="button">
-          <span>Status Bar</span>
-          <span class="status-editor-head-actions">
-            <span class="status-template-link" id="statusTemplatesBtn">Templates →</span>
-            <span id="statusToggleChevron">▾</span>
-          </span>
-        </button>
-        <div class="status-editor-body" id="statusEditorBody">
-          <div class="status-preview">${renderStatusBar(status)}</div>
-
-          <div class="form-field">
-            <label>Time</label>
-            <input id="statusTimeInput" type="text" value="${status.time || ''}" placeholder="9:41" />
-            <div class="status-quick-row">${this._quickpickHTML('time', quick.time || [])}<button class="status-save-qp" data-quickpick-save="time" type="button">+ Save</button></div>
-          </div>
-
-          <div class="form-field">
-            <label>Carrier</label>
-            <input id="statusCarrierInput" type="text" value="${status.carrier || ''}" placeholder="Verizon" />
-            <div class="status-quick-row">${this._quickpickHTML('carrier', quick.carrier || [])}<button class="status-save-qp" data-quickpick-save="carrier" type="button">+ Save</button></div>
-          </div>
-
-          <div class="form-field">
-            <label>Network Badge</label>
-            <input id="statusNetworkInput" type="text" value="${status.network || ''}" placeholder="LTE" />
-            <div class="status-quick-row">${this._quickpickHTML('network', quick.network || [])}<button class="status-save-qp" data-quickpick-save="network" type="button">+ Save</button></div>
-          </div>
-
-          <div class="form-field">
-            <label>Signal</label>
-            <div class="status-pill-row">${this._pillRow('signal', ['full', '3bar', '2bar', '1bar', 'none', 'sos', 'airplane'], status.signal)}</div>
-          </div>
-
-          <div class="form-field">
-            <label>WiFi</label>
-            <div class="status-pill-row">${this._pillRow('wifi', ['full', 'medium', 'weak', 'off'], status.wifi)}</div>
-          </div>
-
-          <div class="form-field">
-            <label>Battery</label>
-            <div class="status-pill-row">${this._pillRow('battery', ['full', 'medium', 'low', 'critical', 'dead'], status.battery)}</div>
-            <div class="status-toggle-row">
-              ${this._boolChip('charging', '⚡ Charging', status.charging)}
-              ${this._boolChip('low_power', 'Low power', status.low_power)}
-              ${this._boolChip('show_percent', 'Show %', status.show_percent)}
-            </div>
-          </div>
-
-          <div class="form-field">
-            <label>Status Icons</label>
-            ${Object.entries(STATUS_ICON_GROUPS).map(([group, keys]) => `
-              <div class="status-icon-group">
-                <div class="status-icon-group-title">${group}</div>
-                <div class="status-icon-grid">${keys.map(key => this._iconChip(key, status.icons || [])).join('')}</div>
-              </div>`).join('')}
-          </div>
-        </div>
-      </div>`
+      ${p.scenes.length > 1 ? `<div class="btn-danger" id="deleteSceneBtn">Delete Scene</div>` : ''}`
   }
 
   _bindSceneTab(body, p, scene) {
@@ -348,55 +356,217 @@ export class HubPanel {
       }
     })
 
-    const editorBody = body.querySelector('#statusEditorBody')
-    const chevron = body.querySelector('#statusToggleChevron')
-    const setExpanded = (expanded) => {
-      if (!editorBody || !chevron) return
-      editorBody.classList.toggle('open', expanded)
-      chevron.textContent = expanded ? '▴' : '▾'
-    }
-    setExpanded(false)
-
-    body.querySelector('#statusToggleBtn')?.addEventListener('click', (e) => {
-      if (e.target.closest('#statusTemplatesBtn')) return
-      const next = !editorBody?.classList.contains('open')
-      setExpanded(next)
+    body.querySelectorAll('[data-scene-actor-color]').forEach(input => {
+      input.addEventListener('input', () => {
+        const actorId = input.dataset.sceneActorColor
+        if (!actorId) return
+        store.updateSceneActorOverride(this.projectId, scene.id, actorId, { color: input.value })
+        this._renderTab('scene')
+      })
     })
 
-    body.querySelector('#statusTemplatesBtn')?.addEventListener('click', (e) => {
-      e.preventDefault()
-      e.stopPropagation()
-      this._openStatusTemplateSheet(scene.id)
+    body.querySelectorAll('[data-scene-actor-reset]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const actorId = btn.dataset.sceneActorReset
+        if (!actorId) return
+        const hasOverride = scene?.actor_overrides?.[actorId]?.color
+        if (!hasOverride) return
+        store.updateSceneActorOverride(this.projectId, scene.id, actorId, { color: null })
+        this._renderTab('scene')
+      })
     })
+  }
 
-    const refreshSceneTab = () => this._renderTab('scene')
-    const updateStatus = (patch) => {
-      store.updateSceneStatusBar(this.projectId, scene.id, patch)
-      refreshSceneTab()
+  _statusTab(p, scene) {
+    if (!scene) return '<p style="padding:20px;color:var(--t3);">No scene selected.</p>'
+    const status = this._normalizeStatusSettings(this._statusDraft || store.getSceneStatusBar(this.projectId, scene.id))
+    const quick = store.getStatusQuickpicks()
+    const builtins = BUILTIN_STATUS_TEMPLATES
+    const userTemplates = store.getStatusTemplates()
+    const selectedCategory = this._statusTemplateCategory || 'all'
+    const isAirplane = status.signal === 'airplane'
+    const visibleBuiltins = builtins.filter(row => selectedCategory === 'all' || BUILTIN_TEMPLATE_CATEGORIES[row.id] === selectedCategory)
+    const visibleUsers = selectedCategory === 'custom' || selectedCategory === 'all' ? userTemplates : []
+
+    return `
+      <div class="status-tab-wrap">
+        <div class="sb-preview-shell">
+          <div class="status-bar" id="sbLivePreview">${renderStatusBar(status)}</div>
+        </div>
+
+        <div class="sb-zone-map">
+          <button class="sb-zone ${this._statusActiveZone === 'left' ? 'active' : ''}" type="button" data-sb-zone="left">
+            <div class="sb-zone-label">Left Zone</div>
+            <div class="sb-zone-desc">${isAirplane ? '✈ Airplane' : 'Carrier · Signal'}</div>
+          </button>
+          <button class="sb-zone ${this._statusActiveZone === 'center' ? 'active' : ''}" type="button" data-sb-zone="center">
+            <div class="sb-zone-label">Center</div>
+            <div class="sb-zone-desc">Time</div>
+          </button>
+          <button class="sb-zone ${this._statusActiveZone === 'right' ? 'active' : ''}" type="button" data-sb-zone="right">
+            <div class="sb-zone-label">Right Zone</div>
+            <div class="sb-zone-desc">Icons · Batt</div>
+          </button>
+        </div>
+
+        <div class="status-zone-sections">
+          <section class="status-zone-section ${this._statusZoneOpen.left ? 'open' : ''}" id="sbZoneLeftSection">
+            <button class="status-zone-head" type="button" data-sb-collapse="left">LEFT ZONE - Carrier & Signal <span>${this._statusZoneOpen.left ? '▾' : '▸'}</span></button>
+            <div class="status-zone-body">
+              <div class="form-field ${isAirplane ? 'disabled' : ''}">
+                <label>Carrier</label>
+                <input id="statusCarrierInput" type="text" value="${status.carrier || ''}" placeholder="Verizon" ${isAirplane ? 'disabled' : ''} />
+                <div class="status-quick-row">${this._quickpickHTML('carrier', quick.carrier || [], isAirplane)}<button class="status-save-qp" data-quickpick-save="carrier" type="button" ${isAirplane ? 'disabled' : ''}>+ Save</button></div>
+              </div>
+
+              <div class="form-field ${isAirplane ? 'disabled' : ''}">
+                <label>Network</label>
+                <input id="statusNetworkInput" type="text" value="${status.network || ''}" placeholder="LTE" ${isAirplane ? 'disabled' : ''} />
+                <div class="status-quick-row">${this._quickpickHTML('network', quick.network || [], isAirplane)}<button class="status-save-qp" data-quickpick-save="network" type="button" ${isAirplane ? 'disabled' : ''}>+ Save</button></div>
+              </div>
+
+              <div class="form-field">
+                <label>Signal</label>
+                <div class="status-pill-row">${this._pillRow('signal', ['full', '3bar', '2bar', '1bar', 'none', 'sos', 'airplane'], status.signal)}</div>
+              </div>
+            </div>
+          </section>
+
+          <section class="status-zone-section ${this._statusZoneOpen.center ? 'open' : ''}" id="sbZoneCenterSection">
+            <button class="status-zone-head" type="button" data-sb-collapse="center">CENTER - Time <span>${this._statusZoneOpen.center ? '▾' : '▸'}</span></button>
+            <div class="status-zone-body">
+              <div class="form-field">
+                <label>Time</label>
+                <input id="statusTimeInput" type="text" value="${status.time || ''}" placeholder="9:41" />
+                <div class="status-quick-row">${this._quickpickHTML('time', quick.time || [])}<button class="status-save-qp" data-quickpick-save="time" type="button">+ Save</button></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="status-zone-section ${this._statusZoneOpen.right ? 'open' : ''}" id="sbZoneRightSection">
+            <button class="status-zone-head" type="button" data-sb-collapse="right">RIGHT ZONE - Status & Battery <span>${this._statusZoneOpen.right ? '▾' : '▸'}</span></button>
+            <div class="status-zone-body">
+              <div class="form-field ${isAirplane ? 'disabled' : ''}">
+                <label>WiFi</label>
+                <div class="status-pill-row">${this._pillRow('wifi', ['full', 'medium', 'weak', 'off'], status.wifi, isAirplane)}</div>
+              </div>
+
+              <div class="form-field">
+                <label>Battery</label>
+                <div class="status-pill-row">${this._pillRow('battery', ['full', 'medium', 'low', 'critical', 'dead'], status.battery)}</div>
+                <div class="status-toggle-row">
+                  ${this._boolChip('charging', '⚡ Charging', status.charging)}
+                  ${this._boolChip('low_power', 'Low power', status.low_power)}
+                  ${this._boolChip('show_percent', 'Show %', status.show_percent)}
+                </div>
+              </div>
+
+              <div class="form-field">
+                <label>Status Icons</label>
+                ${Object.entries(STATUS_ICON_GROUPS).map(([group, keys]) => `
+                  <div class="status-icon-group">
+                    <div class="status-icon-group-title">${group}</div>
+                    <div class="status-icon-grid">${keys.map(key => this._iconChip(key, status.icons || [])).join('')}</div>
+                  </div>`).join('')}
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div class="status-templates-inline">
+          <div class="status-templates-head">Templates</div>
+          <div class="status-template-filters">
+            ${[
+              ['all', 'All'],
+              ['night', 'Night'],
+              ['travel', 'Travel'],
+              ['work', 'Work'],
+              ['drama', 'Drama'],
+              ['sci-fi', 'Sci-Fi'],
+              ['custom', 'Custom'],
+            ].map(([value, label]) => `<button class="status-template-filter ${selectedCategory === value ? 'active' : ''}" type="button" data-template-category="${value}">${label}</button>`).join('')}
+          </div>
+          <div class="status-template-inline-list">
+            ${visibleBuiltins.map(row => this._statusTemplateCard(row, false)).join('')}
+            ${visibleUsers.map(row => this._statusTemplateCard(row, true)).join('')}
+            ${selectedCategory === 'custom' && !visibleUsers.length ? '<div class="status-template-empty">No saved templates yet.</div><button class="status-template-save-current" type="button" id="statusTemplateSaveCurrentEmpty">+ Save current</button>' : ''}
+          </div>
+          ${selectedCategory === 'custom' ? '' : '<button class="status-template-save-current" type="button" id="statusTemplateSaveCurrent">+ Save current as template</button>'}
+        </div>
+      </div>`
+  }
+
+  _bindStatusTab(body, scene) {
+    if (!scene) return
+    this._statusSceneId = scene.id
+    this._statusDraft = this._normalizeStatusSettings(this._statusDraft || store.getSceneStatusBar(this.projectId, scene.id))
+    this._syncStatusLivePreview()
+
+    const refreshStatusTab = () => this._renderTab('status')
+    const updateStatus = (patch, rerender = false) => {
+      const next = this._normalizeStatusSettings({ ...this._currentSbSettings(), ...(patch || {}) })
+      this._statusDraft = next
+      this._syncStatusLivePreview()
+      this._suppressProjectRender = true
+      store.updateSceneStatusBar(this.projectId, scene.id, next)
+      queueMicrotask(() => {
+        this._suppressProjectRender = false
+      })
+      if (rerender) refreshStatusTab()
     }
 
     body.querySelector('#statusTimeInput')?.addEventListener('input', (e) => updateStatus({ time: e.target.value }))
     body.querySelector('#statusCarrierInput')?.addEventListener('input', (e) => updateStatus({ carrier: e.target.value }))
     body.querySelector('#statusNetworkInput')?.addEventListener('input', (e) => updateStatus({ network: e.target.value }))
 
+    body.querySelectorAll('[data-sb-zone]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const zone = btn.dataset.sbZone || 'left'
+        this._statusActiveZone = zone
+        body.querySelectorAll('[data-sb-zone]').forEach(node => node.classList.toggle('active', node.dataset.sbZone === zone))
+        const sectionMap = {
+          left: '#sbZoneLeftSection',
+          center: '#sbZoneCenterSection',
+          right: '#sbZoneRightSection',
+        }
+        const target = body.querySelector(sectionMap[zone])
+        if (target) {
+          this._statusZoneOpen[zone] = true
+          target.classList.add('open')
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+      })
+    })
+
+    body.querySelectorAll('[data-sb-collapse]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const zone = btn.dataset.sbCollapse
+        if (!zone) return
+        this._statusZoneOpen[zone] = !this._statusZoneOpen[zone]
+        refreshStatusTab()
+      })
+    })
+
     body.querySelectorAll('[data-status-field][data-status-value]').forEach(btn => {
       btn.addEventListener('click', () => {
-        updateStatus({ [btn.dataset.statusField]: btn.dataset.statusValue })
+        const field = btn.dataset.statusField
+        const value = btn.dataset.statusValue
+        updateStatus({ [field]: value }, field === 'signal' || field === 'battery')
       })
     })
 
     body.querySelectorAll('[data-status-bool]').forEach(btn => {
       btn.addEventListener('click', () => {
         const key = btn.dataset.statusBool
-        const current = store.getSceneStatusBar(this.projectId, scene.id)
-        updateStatus({ [key]: !current[key] })
+        const current = this._currentSbSettings()
+        updateStatus({ [key]: !current[key] }, key === 'charging' || key === 'show_percent')
       })
     })
 
     body.querySelectorAll('[data-status-icon]').forEach(btn => {
       btn.addEventListener('click', () => {
         const key = btn.dataset.statusIcon
-        const current = store.getSceneStatusBar(this.projectId, scene.id)
+        const current = this._currentSbSettings()
         const currentIcons = Array.isArray(current.icons) ? current.icons : []
         const exists = currentIcons.includes(key)
         const icons = exists ? currentIcons.filter(v => v !== key) : [...currentIcons, key]
@@ -408,6 +578,7 @@ export class HubPanel {
       chip.addEventListener('click', () => {
         const field = chip.dataset.quickpickField
         const value = chip.dataset.quickpickValue
+        if (chip.disabled) return
         if (!field) return
         updateStatus({ [field]: value })
       })
@@ -417,13 +588,14 @@ export class HubPanel {
         const value = chip.dataset.quickpickValue
         if (!field || !value) return
         store.removeStatusQuickpick(field, value)
-        refreshSceneTab()
+        refreshStatusTab()
       })
     })
 
     body.querySelectorAll('[data-quickpick-save]').forEach(btn => {
       btn.addEventListener('click', () => {
         const field = btn.dataset.quickpickSave
+        if (btn.disabled) return
         const map = {
           time: '#statusTimeInput',
           carrier: '#statusCarrierInput',
@@ -432,37 +604,93 @@ export class HubPanel {
         const v = body.querySelector(map[field])?.value.trim()
         if (!v) return
         store.addStatusQuickpick(field, v)
-        refreshSceneTab()
+        refreshStatusTab()
       })
     })
 
-    body.querySelectorAll('[data-scene-actor-color]').forEach(input => {
-      input.addEventListener('input', () => {
-        const actorId = input.dataset.sceneActorColor
-        if (!actorId) return
-        store.updateSceneActorOverride(this.projectId, scene.id, actorId, { color: input.value })
-        refreshSceneTab()
-      })
-    })
-
-    body.querySelectorAll('[data-scene-actor-reset]').forEach(btn => {
+    body.querySelectorAll('[data-template-category]').forEach(btn => {
       btn.addEventListener('click', () => {
-        const actorId = btn.dataset.sceneActorReset
-        if (!actorId) return
-        const hasOverride = scene?.actor_overrides?.[actorId]?.color
-        if (!hasOverride) return
-        store.updateSceneActorOverride(this.projectId, scene.id, actorId, { color: null })
-        refreshSceneTab()
+        this._statusTemplateCategory = btn.dataset.templateCategory || 'all'
+        refreshStatusTab()
+      })
+    })
+
+    body.querySelectorAll('[data-template-apply]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const templateId = btn.dataset.templateApply
+        const allTemplates = [...BUILTIN_STATUS_TEMPLATES, ...store.getStatusTemplates()]
+        const row = allTemplates.find(t => t.id === templateId)
+        if (!row) return
+        updateStatus(row.status_bar || {}, true)
+      })
+    })
+
+    body.querySelectorAll('[data-template-delete]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const templateId = btn.dataset.templateDelete
+        if (!templateId) return
+        const ok = window.confirm('Delete this template?')
+        if (!ok) return
+        store.deleteStatusTemplate(templateId)
+        refreshStatusTab()
+      })
+    })
+
+    body.querySelectorAll('#statusTemplateSaveCurrent, #statusTemplateSaveCurrentEmpty').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const current = store.getSceneStatusBar(this.projectId, scene.id)
+        this._statusDraft = this._normalizeStatusSettings(current)
+        const name = window.prompt('Template name')?.trim()
+        if (!name) return
+        const emoji = window.prompt('Emoji', '⭐')?.trim() || '⭐'
+        store.saveStatusTemplate({ name, emoji, status_bar: this._statusDraft })
+        this._statusTemplateCategory = 'custom'
+        refreshStatusTab()
       })
     })
   }
 
-  _quickpickHTML(field, values) {
-    return values.map(v => `<button class="status-quick-chip" type="button" data-quickpick-field="${field}" data-quickpick-value="${v}">${v}</button>`).join('')
+  _currentSbSettings() {
+    if (this._statusDraft) return this._statusDraft
+    if (!this._statusSceneId) return {}
+    return store.getSceneStatusBar(this.projectId, this._statusSceneId)
   }
 
-  _pillRow(field, values, active) {
-    return values.map(v => `<button class="status-pill ${v === active ? 'active' : ''}" type="button" data-status-field="${field}" data-status-value="${v}">${v}</button>`).join('')
+  _syncStatusLivePreview() {
+    const preview = document.getElementById('sbLivePreview')
+    if (!preview) return
+    preview.innerHTML = renderStatusBar(this._currentSbSettings())
+  }
+
+  _normalizeStatusSettings(status) {
+    const next = { ...(status || {}) }
+    if (next.charging && next.battery === 'dead') {
+      next.battery = 'low'
+    }
+    if (next.battery === 'dead') {
+      next.show_percent = false
+    }
+    return next
+  }
+
+  _statusTemplateCard(template, isCustom) {
+    return `
+      <div class="status-template-card compact">
+        <div class="status-template-name">${template.emoji || '⭐'} ${template.name}</div>
+        <div class="status-template-preview">${renderStatusBar(template.status_bar)}</div>
+        <div class="status-template-actions">
+          <button type="button" data-template-apply="${template.id}">Apply</button>
+          ${isCustom ? `<button type="button" data-template-delete="${template.id}">Delete</button>` : ''}
+        </div>
+      </div>`
+  }
+
+  _quickpickHTML(field, values, disabled = false) {
+    return values.map(v => `<button class="status-quick-chip" type="button" data-quickpick-field="${field}" data-quickpick-value="${v}" ${disabled ? 'disabled' : ''}>${v}</button>`).join('')
+  }
+
+  _pillRow(field, values, active, disabled = false) {
+    return values.map(v => `<button class="status-pill ${v === active ? 'active' : ''}" type="button" data-status-field="${field}" data-status-value="${v}" ${disabled ? 'disabled' : ''}>${v}</button>`).join('')
   }
 
   _boolChip(key, label, active) {
@@ -473,129 +701,6 @@ export class HubPanel {
     const active = Array.isArray(activeIcons) && activeIcons.includes(key)
     const label = key.replace(/_/g, ' ')
     return `<button class="status-icon-chip ${active ? 'active' : ''}" type="button" data-status-icon="${key}" title="${label}">${label}</button>`
-  }
-
-  _openStatusTemplateSheet(sceneId) {
-    const sceneStatus = store.getSceneStatusBar(this.projectId, sceneId)
-    const userTemplates = store.getStatusTemplates()
-    const builtins = BUILTIN_STATUS_TEMPLATES
-    const sheetWrap = document.createElement('div')
-    sheetWrap.className = 'status-template-sheet-wrap'
-    sheetWrap.innerHTML = `
-      <div class="status-template-sheet-overlay"></div>
-      <div class="status-template-sheet">
-        <div class="status-template-head">
-          <div>Status Templates</div>
-          <button id="statusTemplateClose" type="button">✕</button>
-        </div>
-        <div class="status-template-section-title">Built-in presets</div>
-        <div class="status-template-grid">
-          ${builtins.map(t => `<div class="status-template-card"><div class="status-template-name">${t.emoji} ${t.name}</div><div class="status-template-preview">${renderStatusBar(t.status_bar)}</div><button type="button" data-template-apply="${t.id}">Apply</button></div>`).join('')}
-        </div>
-        <div class="status-template-section-title">Your templates</div>
-        <div class="status-template-grid" id="userTemplateGrid">
-          ${userTemplates.length ? userTemplates.map(t => `<div class="status-template-card"><div class="status-template-name">${t.emoji || '⭐'} ${t.name}</div><div class="status-template-preview">${renderStatusBar(t.status_bar)}</div><div class="status-template-actions"><button type="button" data-user-template-apply="${t.id}">Apply</button><button type="button" data-user-template-share="${t.id}">Share</button><button type="button" data-user-template-rename="${t.id}">Rename</button><button type="button" data-user-template-delete="${t.id}">Delete</button></div></div>`).join('') : '<div class="status-template-empty">No saved templates yet.</div>'}
-        </div>
-        <div class="status-template-footer">
-          <button type="button" id="statusTemplateSaveCurrent">Save current as template</button>
-          <button type="button" id="statusTemplateImport">Import template</button>
-        </div>
-      </div>`
-
-    const close = () => sheetWrap.remove()
-    sheetWrap.querySelector('.status-template-sheet-overlay')?.addEventListener('click', close)
-    sheetWrap.querySelector('#statusTemplateClose')?.addEventListener('click', close)
-
-    const applyTemplate = (row) => {
-      store.updateSceneStatusBar(this.projectId, sceneId, row.status_bar || {})
-      this._renderTab('scene')
-      close()
-    }
-
-    sheetWrap.querySelectorAll('[data-template-apply]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const row = builtins.find(t => t.id === btn.dataset.templateApply)
-        if (!row) return
-        applyTemplate(row)
-      })
-    })
-
-    sheetWrap.querySelectorAll('[data-user-template-apply]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const row = store.getStatusTemplates().find(t => t.id === btn.dataset.userTemplateApply)
-        if (!row) return
-        applyTemplate(row)
-      })
-    })
-
-    sheetWrap.querySelectorAll('[data-user-template-share]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const row = store.getStatusTemplates().find(t => t.id === btn.dataset.userTemplateShare)
-        if (!row) return
-        const code = `bf1:${btoa(JSON.stringify({ name: row.name, emoji: row.emoji, status_bar: row.status_bar }))}`
-        try {
-          await navigator.clipboard.writeText(code)
-          this._snack('Template copied - share it anywhere')
-        } catch {
-          window.prompt('Copy this template code', code)
-        }
-      })
-    })
-
-    sheetWrap.querySelectorAll('[data-user-template-rename]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const row = store.getStatusTemplates().find(t => t.id === btn.dataset.userTemplateRename)
-        if (!row) return
-        const nextName = window.prompt('Rename template', row.name || '')?.trim()
-        if (!nextName) return
-        const all = store.getStatusTemplates().map(t => t.id === row.id ? { ...t, name: nextName } : t)
-        localStorage.setItem('bf_status_templates', JSON.stringify(all))
-        close()
-        this._openStatusTemplateSheet(sceneId)
-      })
-    })
-
-    sheetWrap.querySelectorAll('[data-user-template-delete]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = btn.dataset.userTemplateDelete
-        if (!id) return
-        const ok = window.confirm('Delete this template?')
-        if (!ok) return
-        store.deleteStatusTemplate(id)
-        close()
-        this._openStatusTemplateSheet(sceneId)
-      })
-    })
-
-    sheetWrap.querySelector('#statusTemplateSaveCurrent')?.addEventListener('click', () => {
-      const name = window.prompt('Template name')?.trim()
-      if (!name) return
-      const emoji = window.prompt('Emoji', '⭐')?.trim() || '⭐'
-      store.saveStatusTemplate({ name, emoji, status_bar: sceneStatus })
-      close()
-      this._openStatusTemplateSheet(sceneId)
-    })
-
-    sheetWrap.querySelector('#statusTemplateImport')?.addEventListener('click', () => {
-      const raw = window.prompt('Paste bf1 template code')?.trim()
-      if (!raw) return
-      try {
-        const payload = raw.startsWith('bf1:') ? raw.slice(4) : raw
-        const parsed = JSON.parse(atob(payload))
-        store.saveStatusTemplate({
-          name: parsed.name || 'Imported',
-          emoji: parsed.emoji || '⭐',
-          status_bar: parsed.status_bar || {},
-        })
-        this._snack('Template imported')
-        close()
-        this._openStatusTemplateSheet(sceneId)
-      } catch {
-        this._snack('Invalid template code')
-      }
-    })
-
-    this.overlayLayer.appendChild(sheetWrap)
   }
 
   _snack(msg) {
