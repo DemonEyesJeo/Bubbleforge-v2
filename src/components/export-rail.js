@@ -430,7 +430,7 @@ export class ExportRail {
       <div class="export-progress-wrap">
       <div class="export-progress-title">${done ? 'Export complete' : errored ? 'Export failed' : `Exporting ${fmtLabel}`}</div>
         <div class="export-progress-sub ${errored ? 'is-error' : ''}">
-          ${errored ? (st.message || st.error || 'An unknown export error occurred.') : done ? 'Your video is ready.' : (st.message || 'Rendering and mixing audio...')}
+          ${errored ? (st.message || st.error || 'An unknown export error occurred.') : done ? `${fmtLabel} export is ready.` : (st.message || 'Rendering and mixing audio...')}
         </div>
         <div class="export-progress-track">
           <div class="export-progress-fill" style="width:${progress}%"></div>

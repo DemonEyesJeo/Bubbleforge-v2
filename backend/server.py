@@ -311,7 +311,7 @@ def _run_export(job_id, project):
         jobs[job_id]['status'] = 'done'
         jobs[job_id]['progress'] = 100
         jobs[job_id]['output_path'] = str(out_path)
-        jobs[job_id]['output_url'] = f"/api/exports/{out_path.name}"
+        jobs[job_id]['output_url'] = f"/api/exports/{out_path.name}" if out_path.is_file() else None
     except Exception as e:
         jobs[job_id]['status'] = 'error'
         jobs[job_id]['error'] = str(e)
