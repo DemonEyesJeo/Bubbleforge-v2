@@ -21,6 +21,7 @@ export class PlayScreen {
     this._timelineMs = []
     this._removeScrubListeners = null
     this._playheadMs = 0
+    this._playCtx = null
   }
 
   render() {
@@ -106,6 +107,8 @@ export class PlayScreen {
     this._totalMs = totalMs || 10000
     this._el.querySelector('#timeTotal').textContent = this._formatTime(this._totalMs / 1000)
 
+    this._playCtx = { p, scene, rs }
+
     const track = this._el.querySelector('#progressTrack')
     let scrubbing = false
     let resumeAfterScrub = false
@@ -115,17 +118,7 @@ export class PlayScreen {
       if (!rect.width) return
       const frac = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
       const targetMs = this._totalMs * frac
-      const target = this._timelineMs.findIndex(ms => ms > targetMs)
-      const nextIndex = target < 0 ? this._msgQueue.length : target
-
-      this._msgIndex = nextIndex
-      this._shownMessages = this._msgQueue.slice(0, nextIndex)
-      this._playheadMs = targetMs
-      this._renderCanvas(p, scene, this._shownMessages)
-      this._setGhostText('')
-
-      this._el.querySelector('#progressFill').style.width = `${frac * 100}%`
-      this._el.querySelector('#timeCurrent').textContent = this._formatTime(targetMs / 1000)
+      this._applyPlayheadState(targetMs, p, scene, rs)
     }
 
     const onPointerMove = (e) => {
@@ -136,6 +129,7 @@ export class PlayScreen {
       if (!scrubbing) return
       applyScrub(e.clientX)
       scrubbing = false
+      track.releasePointerCapture?.(e.pointerId)
       if (resumeAfterScrub && this._msgIndex < this._msgQueue.length) {
         this._startPlayback(p, scene, rs)
       }
@@ -145,16 +139,19 @@ export class PlayScreen {
       resumeAfterScrub = this._playing
       this._pausePlayback()
       scrubbing = true
+      track.setPointerCapture?.(e.pointerId)
       applyScrub(e.clientX)
     }
 
     track.addEventListener('pointerdown', onPointerDown)
-    window.addEventListener('pointermove', onPointerMove)
-    window.addEventListener('pointerup', onPointerUp)
+    track.addEventListener('pointermove', onPointerMove)
+    track.addEventListener('pointerup', onPointerUp)
+    track.addEventListener('pointercancel', onPointerUp)
     this._removeScrubListeners = () => {
       track.removeEventListener('pointerdown', onPointerDown)
-      window.removeEventListener('pointermove', onPointerMove)
-      window.removeEventListener('pointerup', onPointerUp)
+      track.removeEventListener('pointermove', onPointerMove)
+      track.removeEventListener('pointerup', onPointerUp)
+      track.removeEventListener('pointercancel', onPointerUp)
     }
   }
 
@@ -162,10 +159,11 @@ export class PlayScreen {
     this._stopPlayback()
     this._removeScrubListeners?.()
     this._removeScrubListeners = null
+    this._playCtx = null
     this._kb?.destroy()
   }
 
-  _renderCanvas(p, scene, messages) {
+  _renderCanvas(p, scene, messages, extraHtml = '') {
     const canvas = this._el.querySelector('#playCanvas')
     const actorMap = Object.fromEntries(p.actors.map(a => [a.id, a]))
     const rs = p.render_settings || {}
@@ -187,8 +185,101 @@ export class PlayScreen {
       showNames: rs.show_names !== false,
       showTimestamps: rs.show_timestamps === true,
     })
+    html += extraHtml
     canvas.innerHTML = html
     canvas.scrollTop = canvas.scrollHeight
+  }
+
+  _applyPlayheadState(targetMs, p, scene, rs) {
+    const state = this._stateForPlayhead(targetMs, rs)
+    this._msgIndex = state.msgIndex
+    this._shownMessages = this._msgQueue.slice(0, state.completedCount)
+    this._playheadMs = state.playheadMs
+
+    let extraHtml = ''
+    if (state.showIndicator && state.indicatorActor) {
+      extraHtml = renderTypingIndicator(state.indicatorActor)
+    }
+    this._renderCanvas(p, scene, this._shownMessages, extraHtml)
+    this._setGhostText(state.ghostText)
+
+    const pct = this._totalMs > 0 ? (state.playheadMs / this._totalMs) : 0
+    this._el.querySelector('#progressFill').style.width = `${Math.max(0, Math.min(1, pct)) * 100}%`
+    this._el.querySelector('#timeCurrent').textContent = this._formatTime(state.playheadMs / 1000)
+  }
+
+  _stateForPlayhead(ms, rs) {
+    const playheadMs = Math.max(0, Math.min(this._totalMs, Number(ms || 0)))
+    const typingDur = Math.max(1, (rs.typing_duration || 0.08) * 1000)
+    const indicatorDur = Math.max(1, (rs.typing_indicator_duration || 1.2) * 1000)
+    const indicatorGapDur = Math.max(0, (rs.typing_indicator_gap || 0.4) * 1000)
+    const pauseDur = Math.max(0, (rs.message_pause || 0.8) * 1000)
+    const typingEnabled = rs.typing_animation !== false
+    const fakeoutEnabled = rs.fakeout !== false
+
+    let elapsed = 0
+    let completedCount = 0
+
+    for (let i = 0; i < this._msgQueue.length; i++) {
+      const msg = this._msgQueue[i]
+      const text = String(msg?.text || '')
+      const fakeoutCost = fakeoutEnabled && i > 0 ? (indicatorGapDur + indicatorDur * 0.6) : 0
+      const typingCost = typingEnabled ? text.length * typingDur : 0
+      const segment = indicatorDur + fakeoutCost + typingCost + pauseDur
+      const segmentEnd = elapsed + segment
+
+      if (playheadMs >= segmentEnd) {
+        completedCount++
+        elapsed = segmentEnd
+        continue
+      }
+
+      const localMs = playheadMs - elapsed
+      const indicatorOnlyWindow = indicatorDur + fakeoutCost
+      const actor = (this._playCtx?.p?.actors || []).find(a => a.id === msg.actor_id)
+
+      if (localMs < indicatorOnlyWindow) {
+        return {
+          playheadMs,
+          completedCount,
+          msgIndex: i,
+          ghostText: '',
+          showIndicator: true,
+          indicatorActor: actor,
+        }
+      }
+
+      if (typingEnabled && typingCost > 0 && localMs < (indicatorOnlyWindow + typingCost)) {
+        const typedMs = localMs - indicatorOnlyWindow
+        const chars = Math.max(0, Math.min(text.length, Math.floor(typedMs / typingDur)))
+        return {
+          playheadMs,
+          completedCount,
+          msgIndex: i,
+          ghostText: text.slice(0, chars),
+          showIndicator: false,
+          indicatorActor: null,
+        }
+      }
+
+      return {
+        playheadMs,
+        completedCount: completedCount + 1,
+        msgIndex: i + 1,
+        ghostText: '',
+        showIndicator: false,
+        indicatorActor: null,
+      }
+    }
+
+    return {
+      playheadMs,
+      completedCount: this._msgQueue.length,
+      msgIndex: this._msgQueue.length,
+      ghostText: '',
+      showIndicator: false,
+      indicatorActor: null,
+    }
   }
 
   _startPlayback(p, scene, rs) {

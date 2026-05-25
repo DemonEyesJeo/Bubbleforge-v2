@@ -10,6 +10,7 @@ export class ExportRail {
     this._pollTimer = null
     this._exportState = null
     this._interactionCleanups = []
+    this._pollFailures = 0
   }
 
   mount() {
@@ -328,23 +329,30 @@ export class ExportRail {
       if (!data?.job_id) {
         throw new Error(data?.error || 'Failed to start export')
       }
-      this._exportState = { status: 'running', progress: 0, jobId: data.job_id, message: 'Export in progress…' }
+      this._exportState = {
+        status: 'running',
+        progress: 0,
+        jobId: data.job_id,
+        message: 'Export in progress…',
+        startedAt: Date.now(),
+      }
       this._renderExportState()
       this._startPolling(data.job_id)
-    }).catch(() => {
+    }).catch((err) => {
       this._stopPolling()
       this._exportState = {
         status: 'error',
         progress: 0,
-        message: 'Export requires the Python backend server. See README.',
+        message: err?.message || 'Export requires the Python backend server. See README.',
       }
       this._renderExportState()
-      this._snack('Export requires the Python backend server. See README.')
+      this._snack(this._exportState.message)
     })
   }
 
   _startPolling(jobId) {
     this._stopPolling()
+    this._pollFailures = 0
     this._pollTimer = setInterval(async () => {
       try {
         const resp = await fetch(`/api/export/${jobId}`)
@@ -360,7 +368,9 @@ export class ExportRail {
           outputPath: job.output_path,
           outputUrl: job.output_url,
           error: job.error,
+          startedAt: this._exportState?.startedAt || Date.now(),
         }
+        this._pollFailures = 0
         this._exportState = state
         this._renderExportState()
 
@@ -368,6 +378,16 @@ export class ExportRail {
           this._stopPolling()
         }
       } catch (err) {
+        this._pollFailures += 1
+        if (this._pollFailures < 3) {
+          this._exportState = {
+            ...(this._exportState || {}),
+            status: 'running',
+            message: 'Connection hiccup. Reconnecting…',
+          }
+          this._renderExportState()
+          return
+        }
         this._stopPolling()
         this._exportState = {
           status: 'error',
@@ -404,6 +424,7 @@ export class ExportRail {
 
     cta.style.display = running || previewing ? 'none' : 'block'
     this._rail.querySelectorAll('.rail-tab').forEach(t => t.classList.toggle('disabled', running || previewing))
+    if (!running) this._rail.classList.remove('is-exporting')
 
     if (previewing) {
       const p = store.getProject(this.projectId)
@@ -439,7 +460,7 @@ export class ExportRail {
       <div class="export-progress-wrap">
         <div class="export-progress-title">${done ? 'Export complete' : canceled ? 'Export canceled' : errored ? 'Export failed' : `Exporting ${fmtLabel}`}</div>
         <div class="export-progress-sub ${errored ? 'is-error' : ''}">
-          ${errored ? (st.message || st.error || 'An unknown export error occurred.') : canceled ? 'The export was canceled.' : done ? `${fmtLabel} export is ready.` : (st.status === 'cancelling' ? 'Stopping export…' : (st.message || 'Rendering and mixing audio...'))}
+          ${errored ? (st.message || st.error || 'An unknown export error occurred.') : canceled ? 'The export was canceled.' : done ? `${fmtLabel} export is ready in ${this._formatExportDuration(st.startedAt)}.` : (st.status === 'cancelling' ? 'Stopping export…' : (st.message || 'Rendering and mixing audio...'))}
         </div>
         <div class="export-progress-track">
           <div class="export-progress-fill" style="width:${progress}%"></div>
@@ -448,7 +469,8 @@ export class ExportRail {
         ${running && st.jobId ? '<button class="export-share-btn" id="exportCancelBtn">Cancel Export</button>' : ''}
         ${done && st.outputPath ? `<div class="export-output-path">${st.outputPath}</div>` : ''}
         ${done && st.outputUrl ? `<a class="export-output-path" href="${st.outputUrl}" target="_blank" rel="noopener noreferrer">Download exported file</a>` : ''}
-        ${done ? '<button class="export-share-btn" id="exportShareBtn">Share</button>' : ''}
+        ${done ? `<button class="export-share-btn" id="exportShareBtn">${st.outputUrl ? 'Share' : 'Copy output path'}</button>` : ''}
+        ${!running && !previewing ? '<button class="export-share-btn" id="exportResetBtn">Back to export settings</button>' : ''}
       </div>
     `
 
@@ -487,6 +509,23 @@ export class ExportRail {
         }
       })
     }
+
+    const resetBtn = body.querySelector('#exportResetBtn')
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => {
+        this._exportState = null
+        this._renderTab(this.activeTab)
+      })
+    }
+  }
+
+  _formatExportDuration(startedAt) {
+    if (!startedAt) return 'a moment'
+    const seconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000))
+    if (seconds < 60) return `${seconds}s`
+    const mins = Math.floor(seconds / 60)
+    const rem = seconds % 60
+    return `${mins}m ${String(rem).padStart(2, '0')}s`
   }
 
   _snack(msg) {
