@@ -819,12 +819,23 @@ export class ConversationScreen {
     }
     const parts = []
     if (this._composePendingMedia) {
-      parts.push(`<div class="audio-pill-thumb"><img src="${this._composePendingMedia}" alt="attachment preview"><span>Image ready</span></div>`)
+      parts.push(`<div class="audio-pill-thumb"><img src="${this._composePendingMedia}" alt="attachment preview"><span>Image ready</span><button class="audio-pill-mini-btn" id="clearPendingMediaBtn" type="button">✕</button></div>`)
     }
     if (this._composePendingAudio) {
-      parts.push(`<div class="audio-pill-thumb"><span>Audio ready</span><audio class="bubble-audio" controls src="${this._composePendingAudio}"></audio></div>`)
+      parts.push(`<div class="audio-pill-thumb"><span>Audio ready</span><audio class="bubble-audio" controls src="${this._composePendingAudio}"></audio><button class="audio-pill-mini-btn" id="clearPendingAudioBtn" type="button">✕</button></div>`)
     }
     wrap.innerHTML = parts.join('')
+
+    wrap.querySelector('#clearPendingMediaBtn')?.addEventListener('click', () => {
+      this._composePendingMedia = ''
+      this._syncComposeMediaPreview()
+      this._syncSendReady()
+    })
+    wrap.querySelector('#clearPendingAudioBtn')?.addEventListener('click', () => {
+      this._composePendingAudio = ''
+      this._syncComposeMediaPreview()
+      this._syncSendReady()
+    })
   }
 
   _toggleEmojiPicker(anchor) {
