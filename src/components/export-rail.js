@@ -235,6 +235,13 @@ export class ExportRail {
     const p = store.getProject(this.projectId)
     if (!p) return
 
+    const rs = p.render_settings || {}
+    if (rs.preview_before_export && !this._exportState?.previewing) {
+      this._exportState = { status: 'preview', progress: 0, message: 'Preview before export', previewing: true }
+      this._renderExportState()
+      return
+    }
+
     this._exportState = { status: 'queued', progress: 0, message: 'Starting export…' }
     this._rail.classList.add('is-exporting')
     this._renderExportState()
@@ -311,11 +318,42 @@ export class ExportRail {
 
     const progress = Math.max(0, Math.min(100, Number(st.progress || 0)))
     const running = st.status === 'queued' || st.status === 'running'
+    const previewing = st.status === 'preview'
     const done = st.status === 'done'
     const errored = st.status === 'error'
 
-    cta.style.display = running ? 'none' : 'block'
-    this._rail.querySelectorAll('.rail-tab').forEach(t => t.classList.toggle('disabled', running))
+    cta.style.display = running || previewing ? 'none' : 'block'
+    this._rail.querySelectorAll('.rail-tab').forEach(t => t.classList.toggle('disabled', running || previewing))
+
+    if (previewing) {
+      const p = store.getProject(this.projectId)
+      const scene = store.getActiveScene(this.projectId)
+      const previewHtml = scene
+        ? `<div class="export-preview-scene">${scene.name}</div>${scene.messages.length ? `<div class="export-preview-card">${scene.messages[0].text}</div>` : '<div class="export-preview-card is-empty">No messages in scene</div>'}`
+        : '<div class="export-preview-card is-empty">No active scene</div>'
+
+      body.innerHTML = `
+        <div class="export-progress-wrap">
+          <div class="export-progress-title">Preview before export</div>
+          <div class="export-progress-sub">Check the first frame before rendering the full file.</div>
+          <div class="export-preview-wrap">${previewHtml}</div>
+          <div class="export-preview-actions">
+            <button class="export-preview-btn ghost" id="exportPreviewCancelBtn">Cancel</button>
+            <button class="export-preview-btn primary" id="exportPreviewGoBtn">Export</button>
+          </div>
+        </div>
+      `
+
+      body.querySelector('#exportPreviewCancelBtn')?.addEventListener('click', () => {
+        this._exportState = null
+        this._renderTab(this.activeTab)
+      })
+      body.querySelector('#exportPreviewGoBtn')?.addEventListener('click', () => {
+        this._exportState = null
+        this._doExport()
+      })
+      return
+    }
 
     body.innerHTML = `
       <div class="export-progress-wrap">
