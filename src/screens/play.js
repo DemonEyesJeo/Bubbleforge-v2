@@ -94,7 +94,8 @@ export class PlayScreen {
     let totalMs = 0
     this._timelineMs = []
     for (const msg of this._msgQueue) {
-      const typingCost = typingEnabled ? msg.text.length * typingDur : 0
+      const msgText = String(msg?.text || '')
+      const typingCost = typingEnabled ? msgText.length * typingDur : 0
       totalMs += indicatorDur + typingCost + pauseDur
       this._timelineMs.push(totalMs)
     }
@@ -304,7 +305,7 @@ export class PlayScreen {
     canvas.querySelectorAll('.typing-row').forEach(r => r.remove())
 
     let charIdx = 0
-    const chars = msg.text.split('')
+    const chars = String(msg?.text || '').split('')
     const charMs = rs.typing_duration || 0.08
 
     const typeNext = () => {
