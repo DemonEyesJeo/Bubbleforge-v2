@@ -185,7 +185,7 @@ export class HomeScreen {
       const name = (input?.value || '').trim() || 'New Story'
       const project = store.createProject(name)
       this._closeCreateProjectSheet()
-      push('conversation', { projectId: project.id })
+      push('project', { projectId: project.id })
     }
 
     overlay.addEventListener('click', close)
@@ -405,7 +405,7 @@ export class HomeScreen {
 
     list.querySelectorAll('.project-card').forEach(card => {
       card.addEventListener('click', () => {
-        push('conversation', { projectId: card.dataset.projectId })
+        push('project', { projectId: card.dataset.projectId })
       })
     })
 
