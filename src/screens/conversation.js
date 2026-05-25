@@ -110,6 +110,7 @@ export class ConversationScreen {
           <input id="composeAudioInput" type="file" accept="audio/*" hidden />
           <input id="composeCameraInput" type="file" accept="image/*" capture="environment" hidden />
           <input id="composeMediaInput" type="file" accept="image/*" hidden />
+          <div class="nav-btn" id="cancelEditBtn" title="Cancel edit" style="display:none;">✕</div>
           <div class="nav-btn" id="cameraBtn" title="Camera">${icons.camera}</div>
           <div class="nav-btn" id="mediaBtn" title="Attach image">${icons.image}</div>
           <div class="nav-btn" id="exportBtn" title="Export">${icons.export}</div>
@@ -148,6 +149,7 @@ export class ConversationScreen {
     this._el.querySelector('#composeCameraInput').addEventListener('change', e => this._pickComposeMedia(e.target))
     this._el.querySelector('#composeMediaInput').addEventListener('change', e => this._pickComposeMedia(e.target))
     this._el.querySelector('#emojiBtn').addEventListener('click', e => this._toggleEmojiPicker(e.currentTarget))
+    this._el.querySelector('#cancelEditBtn').addEventListener('click', () => this._clearEditMode())
 
     this._el.querySelectorAll('.audio-pill-button').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -177,6 +179,11 @@ export class ConversationScreen {
     })
 
     input.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && this._editingMsgId) {
+        e.preventDefault()
+        this._clearEditMode()
+        return
+      }
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this._send() }
     })
 
@@ -207,6 +214,9 @@ export class ConversationScreen {
     if (!p) return
 
     const scene = store.getActiveScene(this.projectId)
+    if (this._editingMsgId && this._editingSceneId !== scene?.id) {
+      this._clearEditMode()
+    }
     const totalMsgs = p.scenes.reduce((n, s) => n + s.messages.length, 0)
 
     this._el.querySelector('#sceneTitle').textContent = scene?.name || p.name
@@ -333,18 +343,16 @@ export class ConversationScreen {
 
     menu.querySelector('[data-action="delete"]').addEventListener('click', () => {
       store.deleteMessage(this.projectId, scene.id, msgId)
+      if (this._editingMsgId === msgId && this._editingSceneId === scene.id) {
+        this._clearEditMode()
+      }
       menu.remove()
     })
     menu.querySelector('[data-action="edit"]')?.addEventListener('click', () => {
       const nextMsg = scene.messages.find(m => m.id === msgId)
       if (!nextMsg) return menu.remove()
-      const input = this._el.querySelector('#composeInput')
-      input.value = nextMsg.text
-      input.dispatchEvent(new Event('input'))
-      this._editingMsgId = msgId
-      this._editingSceneId = scene.id
+      this._enterEditMode(scene.id, msgId, nextMsg.text)
       menu.remove()
-      input.focus()
     })
     menu.querySelector('[data-action="actor"]').addEventListener('click', () => {
       this._showActorPicker(bub, p, scene, msgId)
@@ -447,9 +455,15 @@ export class ConversationScreen {
         input.focus()
         return
       }
+      const editingScene = store.getScene(this.projectId, this._editingSceneId)
+      const targetMsg = editingScene?.messages?.find(m => m.id === this._editingMsgId)
+      if (!editingScene || !targetMsg) {
+        this._clearEditMode()
+        this._snack('Message no longer exists. Edit canceled.')
+        return
+      }
       store.updateMessage(this.projectId, this._editingSceneId, this._editingMsgId, { text })
-      this._editingMsgId = null
-      this._editingSceneId = null
+      this._clearEditMode({ preserveText: false })
     } else {
       if (!text && !hasAttachment) return
       const extras = {}
@@ -473,7 +487,38 @@ export class ConversationScreen {
     if (!input || !sendBtn) return
     const hasText = input.value.trim().length > 0
     const hasAttachment = Boolean(this._composePendingMedia || this._composePendingAudio)
-    sendBtn.classList.toggle('ready', hasText || hasAttachment)
+    const canSend = this._editingMsgId ? hasText : (hasText || hasAttachment)
+    sendBtn.classList.toggle('ready', canSend)
+  }
+
+  _enterEditMode(sceneId, msgId, text) {
+    const input = this._el.querySelector('#composeInput')
+    const cancelBtn = this._el.querySelector('#cancelEditBtn')
+    this._editingMsgId = msgId
+    this._editingSceneId = sceneId
+    this._composePendingMedia = ''
+    this._composePendingAudio = ''
+    input.value = String(text || '')
+    input.placeholder = 'Edit message…'
+    input.dispatchEvent(new Event('input'))
+    this._syncComposeMediaPreview()
+    if (cancelBtn) cancelBtn.style.display = 'flex'
+    input.focus()
+  }
+
+  _clearEditMode(opts = {}) {
+    const { preserveText = false } = opts
+    const input = this._el?.querySelector('#composeInput')
+    const cancelBtn = this._el?.querySelector('#cancelEditBtn')
+    this._editingMsgId = null
+    this._editingSceneId = null
+    if (input) {
+      if (!preserveText) input.value = ''
+      input.placeholder = 'Message…'
+      input.dispatchEvent(new Event('input'))
+    }
+    if (cancelBtn) cancelBtn.style.display = 'none'
+    this._syncSendReady()
   }
 
   _openHub() {
