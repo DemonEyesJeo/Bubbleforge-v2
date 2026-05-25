@@ -5,6 +5,7 @@ with progress updates available via /api/export/<job_id>.
 """
 
 import threading
+import time
 import uuid
 from shutil import make_archive
 from pathlib import Path
@@ -203,6 +204,29 @@ def _project_from_frontend(payload: Dict[str, Any]) -> Tuple[Project, Tuple[int,
     out_size = _resolution_to_size(str(rs.get("resolution") or "1080p"))
     return proj, out_size, fmt
 
+
+def _recent_exports(limit: int = 10) -> list[Dict[str, Any]]:
+    rows: list[Dict[str, Any]] = []
+    for job_id, job in jobs.items():
+        if str(job.get('status') or '').lower() != 'done':
+            continue
+        output_url = job.get('output_url')
+        output_path = job.get('output_path')
+        if not output_url or not output_path:
+            continue
+        rows.append({
+            'job_id': job_id,
+            'output_type': job.get('output_type') or 'mp4',
+            'output_url': output_url,
+            'output_path': output_path,
+            'frame_count': int(job.get('frame_count') or 0),
+            'finished_at': float(job.get('finished_at') or 0.0),
+            'duration_s': int(job.get('duration_s') or 0),
+        })
+
+    rows.sort(key=lambda r: r.get('finished_at') or 0, reverse=True)
+    return rows[: max(1, int(limit))]
+
 @app.route('/api/health', methods=['GET'])
 def health():
     return jsonify({'status': 'ok', 'version': '2.0.0'})
@@ -244,6 +268,12 @@ def serve_export(filename):
     exports_dir = Path(__file__).resolve().parent / 'exports'
     return send_from_directory(exports_dir, safe_name, as_attachment=True)
 
+
+@app.route('/api/exports/recent', methods=['GET'])
+def recent_exports():
+    limit = _safe_int(request.args.get('limit', 10), 10)
+    return jsonify({'exports': _recent_exports(limit)})
+
 @app.route('/api/export', methods=['POST'])
 def export():
     data = request.json or {}
@@ -252,7 +282,7 @@ def export():
         return jsonify({'error': 'No project data'}), 400
 
     job_id = str(uuid.uuid4())
-    jobs[job_id] = {'status': 'queued', 'progress': 0}
+    jobs[job_id] = {'status': 'queued', 'progress': 0, 'created_at': time.time()}
     cancel_events[job_id] = threading.Event()
 
     thread = threading.Thread(target=_run_export, args=(job_id, project), daemon=True)
@@ -362,6 +392,8 @@ def _run_export(job_id, project):
         jobs[job_id]['status'] = 'done'
         jobs[job_id]['progress'] = 100
         jobs[job_id]['output_path'] = str(out_path)
+        jobs[job_id]['finished_at'] = time.time()
+        jobs[job_id]['duration_s'] = max(0, int((jobs[job_id]['finished_at'] - float(jobs[job_id].get('created_at') or jobs[job_id]['finished_at']))))
         if out_path.is_file():
             jobs[job_id]['output_url'] = f"/api/exports/{out_path.name}"
         else:

@@ -11,6 +11,8 @@ export class ExportRail {
     this._exportState = null
     this._interactionCleanups = []
     this._pollFailures = 0
+    this._recentExports = []
+    this._loadingRecent = false
   }
 
   mount() {
@@ -46,6 +48,7 @@ export class ExportRail {
       tab.addEventListener('click', () => this._setTab(tab.dataset.tab, tab))
     })
     this._rail.querySelector('#exportCta').addEventListener('click', () => this._doExport())
+    this._loadRecentExports()
     this._renderTab('keyboard')
   }
 
@@ -122,7 +125,8 @@ export class ExportRail {
         ${this._section('Resolution', this._pills(['720p','1080p','4K'], rs.resolution||'1080p', 'resolution', v => v))}
         <div class="rail-section">
           ${this._toggle('Preview before export', 'Show frame 0 before exporting', rs.preview_before_export||false, 'preview_before_export')}
-        </div>`,
+        </div>
+        ${this._recentExportsSection()}`,
     }
 
     body.innerHTML = tabs[tab]?.() || ''
@@ -138,6 +142,29 @@ export class ExportRail {
         store.updateRenderSettings(this.projectId, { music_path: null, music_title: '', music_preview_url: '' })
         this._renderTab('audio')
         this._snack('Background music cleared')
+      })
+    }
+
+    if (tab === 'format') {
+      body.querySelectorAll('[data-recent-open]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const href = btn.dataset.recentOpen
+          if (!href) return
+          window.open(href, '_blank', 'noopener,noreferrer')
+        })
+      })
+      body.querySelectorAll('[data-recent-copy]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const val = btn.dataset.recentCopy
+          if (!val) return
+          try {
+            const absolute = new URL(val, window.location.origin).toString()
+            await navigator.clipboard.writeText(absolute)
+            this._snack('Recent export link copied')
+          } catch {
+            this._snack('Could not copy export link')
+          }
+        })
       })
     }
 
@@ -378,6 +405,7 @@ export class ExportRail {
 
         if (state.status === 'done' || state.status === 'error' || state.status === 'canceled') {
           this._stopPolling()
+          if (state.status === 'done') this._loadRecentExports()
         }
       } catch (err) {
         this._pollFailures += 1
@@ -406,6 +434,70 @@ export class ExportRail {
       clearInterval(this._pollTimer)
       this._pollTimer = null
     }
+  }
+
+  async _loadRecentExports() {
+    this._loadingRecent = true
+    try {
+      const resp = await fetch('/api/exports/recent?limit=8')
+      const data = await resp.json()
+      if (!resp.ok) throw new Error(data?.error || 'Failed to load recent exports')
+      this._recentExports = Array.isArray(data?.exports) ? data.exports : []
+    } catch {
+      this._recentExports = []
+    } finally {
+      this._loadingRecent = false
+      if (!this._exportState && this.activeTab === 'format') {
+        this._renderTab('format')
+      }
+    }
+  }
+
+  _recentExportsSection() {
+    const loading = this._loadingRecent
+    if (loading) {
+      return `<div class="rail-section"><div class="rail-section-title">Recent Exports</div><div class="recent-exports-empty">Loading…</div></div>`
+    }
+    if (!this._recentExports.length) {
+      return `<div class="rail-section"><div class="rail-section-title">Recent Exports</div><div class="recent-exports-empty">No exports yet.</div></div>`
+    }
+    const rows = this._recentExports.map((item) => {
+      const type = String(item.output_type || 'mp4')
+      const label = type === 'png_sequence'
+        ? `PNG sequence${item.frame_count ? ` · ${item.frame_count} frames` : ''}`
+        : type.toUpperCase()
+      return `
+        <div class="recent-export-item">
+          <div class="recent-export-meta">
+            <div class="recent-export-title">${label}</div>
+            <div class="recent-export-sub">${this._formatAgo(item.finished_at)} · ${this._formatDurationSeconds(item.duration_s)}</div>
+          </div>
+          <div class="recent-export-actions">
+            <button class="recent-export-btn" data-recent-open="${item.output_url}">Open</button>
+            <button class="recent-export-btn" data-recent-copy="${item.output_url}">Copy</button>
+          </div>
+        </div>
+      `
+    }).join('')
+    return `<div class="rail-section"><div class="rail-section-title">Recent Exports</div><div class="recent-exports-list">${rows}</div></div>`
+  }
+
+  _formatDurationSeconds(seconds) {
+    const n = Math.max(0, Number(seconds || 0))
+    if (n < 60) return `${Math.round(n)}s`
+    const mins = Math.floor(n / 60)
+    const rem = Math.round(n % 60)
+    return `${mins}m ${String(rem).padStart(2, '0')}s`
+  }
+
+  _formatAgo(ts) {
+    const raw = Number(ts || 0)
+    if (!raw) return 'just now'
+    const delta = Math.max(1, Math.round(Date.now() / 1000 - raw))
+    if (delta < 60) return `${delta}s ago`
+    if (delta < 3600) return `${Math.floor(delta / 60)}m ago`
+    if (delta < 86400) return `${Math.floor(delta / 3600)}h ago`
+    return `${Math.floor(delta / 86400)}d ago`
   }
 
   _renderExportState() {
