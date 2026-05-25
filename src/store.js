@@ -199,8 +199,10 @@ class Store {
   deleteScene(projectId, sceneId) {
     const p = this.getProject(projectId)
     if (!p || p.scenes.length <= 1) return false
+    const nextScenes = p.scenes.filter(s => s.id !== sceneId)
+    if (nextScenes.length === p.scenes.length) return false
     this._snapshot()
-    p.scenes = p.scenes.filter(s => s.id !== sceneId)
+    p.scenes = nextScenes
     if (p.active_scene_id === sceneId) p.active_scene_id = p.scenes[0].id
     p.updated_at = now()
     this._save()
@@ -294,8 +296,9 @@ class Store {
     const p = this.getProject(projectId)
     if (!p) return false
     if ((p.actors || []).length <= 1) return false
-    this._snapshot()
     const remaining = p.actors.filter(a => a.id !== actorId)
+    if (remaining.length === p.actors.length) return false
+    this._snapshot()
     const fallbackActorId = remaining[0]?.id || null
 
     p.actors = remaining
