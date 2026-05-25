@@ -11,6 +11,7 @@ from typing import Any, Dict, Tuple
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from PIL import Image, ImageDraw, ImageFont
 
 from core import Message, Project, export_mp4
 
@@ -41,6 +42,106 @@ def _resolution_to_size(label: str) -> Tuple[int, int]:
     if norm == "4k":
         return (2160, 3840)
     return (1080, 1920)
+
+
+def _load_font(size: int, bold: bool = False):
+    candidates = [
+        "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/liberation-sans/LiberationSans-Bold.ttf" if bold else "/usr/share/fonts/liberation-sans/LiberationSans-Regular.ttf",
+    ]
+    for path in candidates:
+        try:
+            return ImageFont.truetype(path, size=size)
+        except Exception:
+            continue
+    return ImageFont.load_default()
+
+
+def _wrap_text(draw: ImageDraw.ImageDraw, text: str, font, max_width: int) -> list[str]:
+    words = str(text or "").split()
+    if not words:
+        return [""]
+    lines: list[str] = []
+    current = words[0]
+    for word in words[1:]:
+        candidate = f"{current} {word}"
+        box = draw.textbbox((0, 0), candidate, font=font)
+        if box[2] - box[0] <= max_width:
+            current = candidate
+        else:
+            lines.append(current)
+            current = word
+    lines.append(current)
+    return lines
+
+
+def _render_pdf_pages(proj: Project, size: Tuple[int, int]) -> list[Image.Image]:
+    width, height = size
+    title_font = _load_font(max(28, width // 28), bold=True)
+    name_font = _load_font(max(18, width // 54), bold=True)
+    body_font = _load_font(max(20, width // 60), bold=False)
+    small_font = _load_font(max(14, width // 72), bold=False)
+    messages = list(getattr(proj, "messages", []) or [])
+
+    pages: list[Image.Image] = []
+    page = Image.new("RGB", (width, height), color=(12, 12, 12))
+    draw = ImageDraw.Draw(page)
+    draw.text((56, 48), proj.title, fill=(245, 245, 247), font=title_font)
+    draw.text((56, 96), f"{len(messages)} message{'s' if len(messages) != 1 else ''}", fill=(170, 170, 180), font=small_font)
+
+    y = 150
+    line_height = draw.textbbox((0, 0), "Ag", font=body_font)[3] - draw.textbbox((0, 0), "Ag", font=body_font)[1]
+
+    if not messages:
+        draw.text((56, 150), "No messages to export.", fill=(170, 170, 180), font=body_font)
+        return [page]
+
+    for index, msg in enumerate(messages):
+        speaker = getattr(msg, "speaker", "")
+        msg_text = getattr(msg, "text", "")
+        actor = next((a for a in proj.characters if a.name == speaker), None)
+        side_right = bool(actor and actor.side == "right")
+        bubble_color = actor.bubble_hex if actor else ("#2979FF" if side_right else "#2A2A2E")
+        rgb = tuple(int(bubble_color.lstrip("#")[i:i+2], 16) for i in (0, 2, 4))
+        text_color = (255, 255, 255) if side_right else (230, 230, 235)
+        max_text_width = int(width * 0.56)
+        text_lines = _wrap_text(draw, str(msg_text), body_font, max_text_width)
+        bubble_h = max(70, 28 + line_height * len(text_lines))
+        bubble_w = min(max_text_width + 36, width - 112)
+
+        if y + bubble_h + 72 > height and index > 0:
+            pages.append(page)
+            page = Image.new("RGB", (width, height), color=(12, 12, 12))
+            draw = ImageDraw.Draw(page)
+            draw.text((56, 48), proj.title, fill=(245, 245, 247), font=title_font)
+            draw.text((56, 96), f"{len(messages)} message{'s' if len(messages) != 1 else ''}", fill=(170, 170, 180), font=small_font)
+            y = 150
+            line_height = draw.textbbox((0, 0), "Ag", font=body_font)[3] - draw.textbbox((0, 0), "Ag", font=body_font)[1]
+
+        x = width - bubble_w - 56 if side_right else 56
+        draw.rounded_rectangle([x, y, x + bubble_w, y + bubble_h], radius=24, fill=rgb)
+        text_y = y + 18
+        for line in text_lines:
+            draw.text((x + 18, text_y), line, fill=text_color, font=body_font)
+            text_y += line_height + 4
+        if actor:
+            draw.text((x, y + bubble_h + 8), actor.name, fill=(145, 145, 155), font=name_font)
+        y += bubble_h + 52
+
+    pages.append(page)
+    return pages
+
+
+def _export_pdf(proj: Project, out_path: Path, size: Tuple[int, int]) -> None:
+    pages = _render_pdf_pages(proj, size)
+    first, *rest = pages
+    first.save(out_path, save_all=True, append_images=rest)
+
+
+def _export_png_sequence(proj: Project, out_dir: Path, size: Tuple[int, int]) -> None:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for index, page in enumerate(_render_pdf_pages(proj, size), start=1):
+        page.save(out_dir / f"scene_{index:02d}.png")
 
 
 def _project_from_frontend(payload: Dict[str, Any]) -> Tuple[Project, Tuple[int, int], str]:
@@ -125,34 +226,44 @@ def _run_export(job_id, project):
         proj, out_size, fmt = _project_from_frontend(project)
         if not proj.messages:
             raise ValueError('No messages to export in active scene')
-        if fmt != 'mp4':
-            raise ValueError(f"Format '{fmt}' is not wired yet in backend. Select MP4 for now.")
 
         out_dir = Path(__file__).resolve().parent / 'exports'
         out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / f'bubbleforge_{job_id}.mp4'
-
-        def _on_progress(current: int, total: int):
-            pct = int((float(current) / float(max(1, total))) * 100)
-            jobs[job_id]['progress'] = max(0, min(99, pct))
-
         rs_in = dict(project.get('render_settings') or {})
-        export_mp4(
-            proj,
-            str(out_path),
-            fps=float(proj.settings.export_fps or 30),
-            size=out_size,
-            on_progress=_on_progress,
-            typing_duration=float(proj.settings.export_typing_duration or 0.08),
-            typing_indicator_duration=float(proj.settings.typing_indicator_duration or 1.2),
-            typing_indicator_gap=float(proj.settings.typing_indicator_gap or 0.4),
-            typing_enabled=bool(rs_in.get('typing_animation', True)),
-            typing_rewrite_enabled=bool(proj.settings.export_typing_fakeout_enabled),
-            keyboard_style=str(proj.settings.keyboard_style or 'ios'),
-            music_path=proj.settings.music_path,
-            sfx_type=str(proj.settings.sfx_type or 'soft'),
-            music_volume=float(proj.settings.music_volume or 0.7),
-        )
+
+        if fmt == 'mp4':
+            out_path = out_dir / f'bubbleforge_{job_id}.mp4'
+
+            def _on_progress(current: int, total: int):
+                pct = int((float(current) / float(max(1, total))) * 100)
+                jobs[job_id]['progress'] = max(0, min(99, pct))
+
+            export_mp4(
+                proj,
+                str(out_path),
+                fps=float(proj.settings.export_fps or 30),
+                size=out_size,
+                on_progress=_on_progress,
+                typing_duration=float(proj.settings.export_typing_duration or 0.08),
+                typing_indicator_duration=float(proj.settings.typing_indicator_duration or 1.2),
+                typing_indicator_gap=float(proj.settings.typing_indicator_gap or 0.4),
+                typing_enabled=bool(rs_in.get('typing_animation', True)),
+                typing_rewrite_enabled=bool(proj.settings.export_typing_fakeout_enabled),
+                keyboard_style=str(proj.settings.keyboard_style or 'ios'),
+                music_path=proj.settings.music_path,
+                sfx_type=str(proj.settings.sfx_type or 'soft'),
+                music_volume=float(proj.settings.music_volume or 0.7),
+            )
+        elif fmt == 'pdf':
+            out_path = out_dir / f'bubbleforge_{job_id}.pdf'
+            jobs[job_id]['progress'] = 35
+            _export_pdf(proj, out_path, out_size)
+        elif fmt == 'png_sequence':
+            out_path = out_dir / f'bubbleforge_{job_id}_png'
+            jobs[job_id]['progress'] = 35
+            _export_png_sequence(proj, out_path, out_size)
+        else:
+            raise ValueError(f"Format '{fmt}' is not supported yet")
 
         jobs[job_id]['status'] = 'done'
         jobs[job_id]['progress'] = 100
