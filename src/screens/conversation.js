@@ -591,9 +591,13 @@ export class ConversationScreen {
         throw new Error(data?.error || 'Upload failed')
       }
 
-      const previewUrl = URL.createObjectURL(file)
+      const previewUrl = data.url || URL.createObjectURL(file)
       this._setComposeMusicSource(previewUrl, file.name)
-      store.updateRenderSettings(this.projectId, { music_path: data.path, music_title: file.name })
+      store.updateRenderSettings(this.projectId, {
+        music_path: data.path,
+        music_title: file.name,
+        music_preview_url: data.url || '',
+      })
       this._snack(`Music selected: ${file.name}`)
     } catch (err) {
       this._snack(err?.message || 'Could not upload music file')
@@ -633,7 +637,7 @@ export class ConversationScreen {
     const loop = this._el?.querySelector('#composeMusicLoop')
     const fade = this._el?.querySelector('#composeMusicFade')
     const exportPath = rs.music_path || ''
-    const url = this._composeMusicUrl || ''
+    const url = this._composeMusicUrl || rs.music_preview_url || ''
     const musicTitle = rs.music_title || this._composeMusicTitle || (url ? 'Selected audio' : 'No audio selected')
     const musicVolume = Number.isFinite(Number(rs.music_volume)) ? Math.max(0, Math.min(1, Number(rs.music_volume))) : 0.7
     const musicLoop = rs.loop_music !== false
@@ -738,7 +742,7 @@ export class ConversationScreen {
 
   _clearComposeMusic() {
     this._stopComposeMusic()
-    store.updateRenderSettings(this.projectId, { music_path: null, music_title: '' })
+    store.updateRenderSettings(this.projectId, { music_path: null, music_title: '', music_preview_url: '' })
     this._syncComposeMusicTools()
   }
 

@@ -9,7 +9,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 from PIL import Image, ImageDraw, ImageFont
 from werkzeug.utils import secure_filename
@@ -218,7 +218,15 @@ def music_upload():
     out_name = f"{uuid.uuid4().hex}{suffix}"
     out_path = UPLOADS_DIR / out_name
     file.save(out_path)
-    return jsonify({'path': str(out_path), 'name': safe_name})
+    return jsonify({'path': str(out_path), 'url': f'/api/uploads/{out_name}', 'name': safe_name})
+
+
+@app.route('/api/uploads/<path:filename>', methods=['GET'])
+def serve_upload(filename):
+    safe_name = secure_filename(filename)
+    if safe_name != filename:
+        return jsonify({'error': 'Invalid filename'}), 400
+    return send_from_directory(UPLOADS_DIR, safe_name)
 
 @app.route('/api/export', methods=['POST'])
 def export():

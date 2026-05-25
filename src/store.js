@@ -30,6 +30,7 @@ function defaultRenderSettings() {
     loop_music: true,
     fade_music: true,
     music_title: '',
+    music_preview_url: '',
     resolution: '1080p',
     format: 'mp4',
     preview_before_export: false,

@@ -130,7 +130,7 @@ export class ExportRail {
     if (tab === 'audio') {
       body.querySelector('#pickMusicBtn')?.addEventListener('click', () => this._pickMusicFile())
       body.querySelector('#clearMusicBtn')?.addEventListener('click', () => {
-        store.updateRenderSettings(this.projectId, { music_path: null, music_title: '' })
+        store.updateRenderSettings(this.projectId, { music_path: null, music_title: '', music_preview_url: '' })
         this._renderTab('audio')
         this._snack('Background music cleared')
       })
@@ -210,7 +210,11 @@ export class ExportRail {
           throw new Error(data?.error || 'Upload failed')
         }
 
-        store.updateRenderSettings(this.projectId, { music_path: data.path, music_title: data.name || file.name })
+        store.updateRenderSettings(this.projectId, {
+          music_path: data.path,
+          music_title: data.name || file.name,
+          music_preview_url: data.url || '',
+        })
         this._renderTab('audio')
         this._snack(`Music selected: ${data.name || file.name}`)
       } catch (err) {
