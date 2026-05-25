@@ -38,6 +38,7 @@ export class ConversationScreen {
         <div class="speaker-strip" id="speakerStrip"></div>
         <div class="compose-row">
           <textarea class="compose-input" id="composeInput" rows="1" placeholder="Message…"></textarea>
+          <div class="nav-btn" id="emojiBtn" title="Emoji">${icons.emoji}</div>
           <div class="nav-btn" id="exportBtn" title="Export">${icons.export}</div>
           <div class="send-btn" id="sendBtn">${icons.send}</div>
         </div>
@@ -57,6 +58,7 @@ export class ConversationScreen {
     })
     this._el.querySelector('#menuBtn').addEventListener('click', () => this._openHub())
     this._el.querySelector('#exportBtn').addEventListener('click', () => this._openExport())
+    this._el.querySelector('#emojiBtn').addEventListener('click', e => this._toggleEmojiPicker(e.currentTarget))
 
     const input = this._el.querySelector('#composeInput')
     const sendBtn = this._el.querySelector('#sendBtn')
@@ -265,6 +267,43 @@ export class ConversationScreen {
     const overlayLayer = document.getElementById('overlay-layer')
     this._exportRail = new ExportRail(overlayLayer, this.projectId, () => { this._exportRail = null })
     this._exportRail.mount()
+  }
+
+  _toggleEmojiPicker(anchor) {
+    document.querySelectorAll('.emoji-menu').forEach(m => m.remove())
+    const menu = document.createElement('div')
+    menu.className = 'bubble-menu emoji-menu fade-in'
+    const emojis = ['😀','😂','😍','🥲','😎','🔥','✨','💬','❤️','👍']
+    menu.innerHTML = emojis.map(emoji => `<div class="emoji-item" data-emoji="${emoji}">${emoji}</div>`).join('')
+
+    const rect = anchor.getBoundingClientRect()
+    const appRect = document.getElementById('app').getBoundingClientRect()
+    menu.style.position = 'absolute'
+    menu.style.right = `${Math.max(12, appRect.width - (rect.right - appRect.left))}px`
+    menu.style.bottom = `${Math.max(70, appRect.height - (rect.top - appRect.top))}px`
+    menu.style.zIndex = '520'
+    document.getElementById('app').appendChild(menu)
+
+    menu.querySelectorAll('.emoji-item').forEach(item => {
+      item.addEventListener('click', () => {
+        this._insertEmoji(item.dataset.emoji)
+        menu.remove()
+      })
+    })
+
+    setTimeout(() => document.addEventListener('click', () => menu.remove(), { once: true }), 50)
+  }
+
+  _insertEmoji(emoji) {
+    const input = this._el.querySelector('#composeInput')
+    if (!input) return
+    const start = input.selectionStart ?? input.value.length
+    const end = input.selectionEnd ?? input.value.length
+    input.value = `${input.value.slice(0, start)}${emoji}${input.value.slice(end)}`
+    const nextPos = start + emoji.length
+    input.setSelectionRange(nextPos, nextPos)
+    input.dispatchEvent(new Event('input'))
+    input.focus()
   }
 
   _rgb(hex) {
