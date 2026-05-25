@@ -359,6 +359,9 @@ export class ExportRail {
     const body = this._rail.querySelector('#railBody')
     const cta = this._rail.querySelector('#exportCta')
     const st = this._exportState
+    const p = store.getProject(this.projectId)
+    const fmt = (p?.render_settings?.format || 'mp4').toLowerCase()
+    const fmtLabel = fmt === 'pdf' ? 'PDF' : fmt === 'png_sequence' ? 'PNG Sequence' : 'MP4'
     if (!body || !cta || !st) return
 
     const progress = Math.max(0, Math.min(100, Number(st.progress || 0)))
@@ -402,7 +405,7 @@ export class ExportRail {
 
     body.innerHTML = `
       <div class="export-progress-wrap">
-        <div class="export-progress-title">${done ? 'Export complete' : errored ? 'Export failed' : 'Exporting MP4'}</div>
+      <div class="export-progress-title">${done ? 'Export complete' : errored ? 'Export failed' : `Exporting ${fmtLabel}`}</div>
         <div class="export-progress-sub ${errored ? 'is-error' : ''}">
           ${errored ? (st.message || st.error || 'An unknown export error occurred.') : done ? 'Your video is ready.' : (st.message || 'Rendering and mixing audio...')}
         </div>
