@@ -1,0 +1,13 @@
+{
+  "appId": "com.bubbleforge.app",
+  "appName": "Bubbleforge",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "Filesystem": {
+      "androidExternalStoragePermission": true
+    }
+  }
+}

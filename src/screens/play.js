@@ -1,0 +1,290 @@
+import { store } from '../store.js'
+import { pop } from '../router.js'
+import { icons, statusIcons } from '../components/icons.js'
+import { renderMessages, renderTypingIndicator } from '../components/bubble.js'
+import { KeyboardOverlay } from '../components/keyboard.js'
+
+export class PlayScreen {
+  constructor({ projectId }) {
+    this.projectId = projectId
+    this._playing  = false
+    this._progress = 0
+    this._kb       = null
+    this._rafId    = null
+    this._msgQueue = []
+    this._msgIndex = 0
+    this._charIndex = 0
+    this._lastTime  = 0
+    this._pauseMs   = 0
+    this._shownMessages = []
+    this._totalMs = 0
+    this._timelineMs = []
+    this._removeScrubListeners = null
+  }
+
+  render() {
+    const el = document.createElement('div')
+    el.className = 'play-screen'
+    el.innerHTML = `
+      <div class="status-bar" style="background:#000;">
+        <span class="time">9:41</span>
+        <div style="color:var(--accent);font-size:14px;cursor:pointer;" id="closeBtn">✕ Close</div>
+      </div>
+      <div class="play-canvas" id="playCanvas"></div>
+      <div class="compose-input play-ghost-input" id="ghostInput" aria-hidden="true"></div>
+      <div class="keyboard-placeholder" id="kbPlaceholder"></div>
+      <div class="play-controls">
+        <div class="play-btn" id="playBtn">${icons.play}</div>
+        <div class="progress-wrap">
+          <div class="progress-times">
+            <span id="timeCurrent">0:00</span>
+            <span id="timeTotal">0:00</span>
+          </div>
+          <div class="progress-bar-track" id="progressTrack">
+            <div class="progress-bar-fill" id="progressFill" style="width:0%;"></div>
+          </div>
+        </div>
+      </div>`
+    return el
+  }
+
+  bind() {
+    const p = store.getProject(this.projectId)
+    if (!p) return
+
+    const rs    = p.render_settings || {}
+    const scene = store.getActiveScene(this.projectId)
+
+    // Build message queue
+    this._msgQueue = scene?.messages || []
+    this._shownMessages = []
+
+    // Set up keyboard overlay
+    if (rs.keyboard_style !== 'off' && rs.keyboard_style) {
+      this._kb = new KeyboardOverlay(
+        this._el.querySelector('#kbPlaceholder'),
+        rs.keyboard_style
+      )
+      this._kb.mount()
+    }
+
+    // Render initial empty canvas with scene header
+    this._renderCanvas(p, scene, [])
+
+    // Controls
+    this._el.querySelector('#closeBtn').addEventListener('click', () => {
+      this._stopPlayback()
+      pop()
+    })
+
+    const playBtn = this._el.querySelector('#playBtn')
+    playBtn.addEventListener('click', () => {
+      if (this._playing) this._pausePlayback()
+      else               this._startPlayback(p, scene, rs)
+    })
+
+    // Calculate total duration for progress bar
+    const typingDur = (rs.typing_duration || 0.08) * 1000
+    const indicatorDur = (rs.typing_indicator_duration || 1.2) * 1000
+    const pauseDur = (rs.message_pause || 0.8) * 1000
+    let totalMs = 0
+    this._timelineMs = []
+    for (const msg of this._msgQueue) {
+      totalMs += indicatorDur + msg.text.length * typingDur + pauseDur
+      this._timelineMs.push(totalMs)
+    }
+    this._totalMs = totalMs || 10000
+    this._el.querySelector('#timeTotal').textContent = this._formatTime(totalMs / 1000)
+
+    const track = this._el.querySelector('#progressTrack')
+    let scrubbing = false
+
+    const applyScrub = (clientX) => {
+      const rect = track.getBoundingClientRect()
+      if (!rect.width) return
+      const frac = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+      const target = Math.max(0, Math.min(this._msgQueue.length, Math.round(frac * this._msgQueue.length)))
+      this._msgIndex = target
+      this._shownMessages = this._msgQueue.slice(0, target)
+      this._renderCanvas(p, scene, this._shownMessages)
+      this._setGhostText('')
+
+      this._el.querySelector('#progressFill').style.width = `${frac * 100}%`
+      this._el.querySelector('#timeCurrent').textContent = this._formatTime((this._totalMs * frac) / 1000)
+    }
+
+    const onPointerMove = (e) => {
+      if (!scrubbing) return
+      applyScrub(e.clientX)
+    }
+    const onPointerUp = (e) => {
+      if (!scrubbing) return
+      applyScrub(e.clientX)
+      scrubbing = false
+    }
+    const onPointerDown = (e) => {
+      const wasPlaying = this._playing
+      this._pausePlayback()
+      scrubbing = true
+      applyScrub(e.clientX)
+      if (wasPlaying) this._startPlayback(p, scene, rs)
+    }
+
+    track.addEventListener('pointerdown', onPointerDown)
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', onPointerUp)
+    this._removeScrubListeners = () => {
+      track.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', onPointerUp)
+    }
+  }
+
+  destroy() {
+    this._stopPlayback()
+    this._removeScrubListeners?.()
+    this._removeScrubListeners = null
+    this._kb?.destroy()
+  }
+
+  _renderCanvas(p, scene, messages) {
+    const canvas = this._el.querySelector('#playCanvas')
+    const actorMap = Object.fromEntries(p.actors.map(a => [a.id, a]))
+
+    let html = `
+      <div class="msg-timestamp">Today</div>
+      <div class="scene-divider">
+        <div class="scene-divider-rule left"></div>
+        <div class="scene-divider-label">${scene?.name?.toUpperCase() || 'SCENE'}</div>
+        <div class="scene-divider-rule right"></div>
+      </div>`
+
+    html += renderMessages(messages, p.actors)
+    canvas.innerHTML = html
+    canvas.scrollTop = canvas.scrollHeight
+  }
+
+  _startPlayback(p, scene, rs) {
+    if (this._msgIndex >= this._msgQueue.length) {
+      // Restart
+      this._msgIndex = 0
+      this._shownMessages = []
+      this._elapsedMs = 0
+      this._renderCanvas(p, scene, [])
+    }
+    this._playing = true
+    this._el.querySelector('#playBtn').innerHTML = icons.pause
+    this._kb?.show()
+    this._runNext(p, scene, rs)
+  }
+
+  _pausePlayback() {
+    this._playing = false
+    this._el.querySelector('#playBtn').innerHTML = icons.play
+    clearTimeout(this._animTimeout)
+  }
+
+  _stopPlayback() {
+    this._playing = false
+    clearTimeout(this._animTimeout)
+    this._setGhostText('')
+    this._kb?.hide()
+  }
+
+  _setGhostText(text) {
+    const ghost = this._el?.querySelector('#ghostInput')
+    if (!ghost) return
+    ghost.textContent = text || ''
+    ghost.classList.toggle('has-text', Boolean(text))
+  }
+
+  _runNext(p, scene, rs) {
+    if (!this._playing) return
+    if (this._msgIndex >= this._msgQueue.length) {
+      this._pausePlayback()
+      this._kb?.hide()
+      return
+    }
+
+    const msg      = this._msgQueue[this._msgIndex]
+    const actor    = p.actors.find(a => a.id === msg.actor_id)
+    const typingMs = (rs.typing_duration || 0.08) * 1000
+    const indicMs  = (rs.typing_indicator_duration || 1.2) * 1000
+    const pauseMs  = (rs.message_pause || 0.8) * 1000
+    const fakeout  = rs.fakeout !== false
+
+    const canvas = this._el.querySelector('#playCanvas')
+
+    const showTyping = () => {
+      const rows = canvas.querySelectorAll('.typing-row')
+      rows.forEach(r => r.remove())
+      this._setGhostText('')
+      canvas.insertAdjacentHTML('beforeend', renderTypingIndicator(actor))
+      canvas.scrollTop = canvas.scrollHeight
+    }
+    const hideTyping = () => canvas.querySelectorAll('.typing-row').forEach(r => r.remove())
+
+    // 1. Show typing indicator
+    showTyping()
+    this._animTimeout = setTimeout(() => {
+      if (!this._playing) return
+
+      if (fakeout && this._msgIndex > 0) {
+        // Fakeout: hide briefly, show again
+        hideTyping()
+        this._animTimeout = setTimeout(() => {
+          if (!this._playing) return
+          showTyping()
+          this._animTimeout = setTimeout(() => this._typeMessage(p, scene, rs, msg, actor, typingMs, pauseMs), indicMs * 0.6)
+        }, (rs.typing_indicator_gap || 0.4) * 1000)
+      } else {
+        this._typeMessage(p, scene, rs, msg, actor, typingMs, pauseMs)
+      }
+    }, indicMs)
+  }
+
+  _typeMessage(p, scene, rs, msg, actor, typingMs, pauseMs) {
+    if (!this._playing) return
+    const canvas = this._el.querySelector('#playCanvas')
+    canvas.querySelectorAll('.typing-row').forEach(r => r.remove())
+
+    let charIdx = 0
+    const chars = msg.text.split('')
+
+    const typeNext = () => {
+      if (!this._playing) return
+      if (charIdx >= chars.length) {
+        // Message complete — show full bubble
+        this._setGhostText('')
+        this._shownMessages.push(msg)
+        this._msgIndex++
+        this._renderCanvas(p, scene, this._shownMessages)
+
+        // Update progress
+        const pct = this._msgIndex / this._msgQueue.length
+        this._el.querySelector('#progressFill').style.width = `${pct * 100}%`
+        const elapsed = pct * (this._totalMs / 1000)
+        this._el.querySelector('#timeCurrent').textContent = this._formatTime(elapsed)
+
+        this._kb?.hide()
+        this._animTimeout = setTimeout(() => this._runNext(p, scene, rs), pauseMs)
+        return
+      }
+
+      const ch = chars[charIdx++]
+      this._kb?.pressKey(ch)
+      this._setGhostText(chars.slice(0, charIdx).join(''))
+      if (charIdx === 1) this._kb?.show()
+
+      this._animTimeout = setTimeout(typeNext, typingMs + (Math.random() * typingMs * 0.4))
+    }
+
+    typeNext()
+  }
+
+  _formatTime(secs) {
+    const m = Math.floor(secs / 60)
+    const s = Math.floor(secs % 60)
+    return `${m}:${String(s).padStart(2,'0')}`
+  }
+}
