@@ -20,6 +20,9 @@ export class ConversationScreen {
     this._audioRecorder = null
     this._audioChunks = []
     this._audioStream = null
+    this._composeMusicAudio = null
+    this._composeMusicRaf = null
+    this._composeMusicUrl = ''
     this._onChange = () => this._refresh()
   }
 
@@ -61,6 +64,24 @@ export class ConversationScreen {
                 <button class="audio-pill-action" id="audioAttachBtn" type="button">Attach</button>
                 <button class="audio-pill-action primary" id="audioRecordBtn" type="button">Record</button>
               </div>
+              <div class="audio-pill-music">
+                <div class="audio-pill-music-head">
+                  <div>
+                    <div class="audio-pill-music-title" id="composeMusicTitle">No audio selected</div>
+                    <div class="audio-pill-music-sub" id="composeMusicSub">Pick a background track for this story</div>
+                  </div>
+                  <button class="audio-pill-action primary" id="composeMusicPickBtn" type="button">Pick music</button>
+                </div>
+                <div class="audio-pill-music-actions">
+                  <button class="audio-pill-mini-btn" id="composeMusicPlayBtn" type="button">${icons.play}</button>
+                  <button class="audio-pill-mini-btn" id="composeMusicRewindBtn" type="button">${icons.rewind}</button>
+                </div>
+                <div class="audio-pill-music-time">
+                  <span id="composeMusicNow">00:00.0</span>
+                  <span id="composeMusicTotal">00:00</span>
+                </div>
+                <input class="audio-pill-music-seek" id="composeMusicSeek" type="range" min="0" max="0.1" step="0.1" value="0" />
+              </div>
             <div class="audio-pill-track"><div class="audio-pill-fill" style="width:38%"></div></div>
           </div>
         </div>
@@ -69,6 +90,7 @@ export class ConversationScreen {
           <textarea class="compose-input" id="composeInput" rows="1" placeholder="Message…"></textarea>
           <div class="compose-count" id="composeCount">0 / 160</div>
           <div class="nav-btn" id="emojiBtn" title="Emoji">${icons.emoji}</div>
+            <input id="composeMusicInput" type="file" accept="audio/*" hidden />
           <input id="composeAudioInput" type="file" accept="audio/*" hidden />
           <input id="composeCameraInput" type="file" accept="image/*" capture="environment" hidden />
           <input id="composeMediaInput" type="file" accept="image/*" hidden />
@@ -94,10 +116,14 @@ export class ConversationScreen {
     this._el.querySelector('#menuBtn').addEventListener('click', () => this._openHub())
     this._el.querySelector('#exportBtn').addEventListener('click', () => this._openExport())
     this._el.querySelector('#audioToggleBtn').addEventListener('click', () => this._toggleAudioPill())
+    this._el.querySelector('#composeMusicPickBtn').addEventListener('click', () => this._el.querySelector('#composeMusicInput')?.click())
+    this._el.querySelector('#composeMusicPlayBtn').addEventListener('click', () => this._toggleComposeMusicPlay())
+    this._el.querySelector('#composeMusicRewindBtn').addEventListener('click', () => this._rewindComposeMusic())
     this._el.querySelector('#audioAttachBtn').addEventListener('click', () => this._el.querySelector('#composeAudioInput')?.click())
     this._el.querySelector('#audioRecordBtn').addEventListener('click', () => this._toggleAudioRecording())
     this._el.querySelector('#cameraBtn').addEventListener('click', () => this._el.querySelector('#composeCameraInput')?.click())
     this._el.querySelector('#mediaBtn').addEventListener('click', () => this._el.querySelector('#composeMediaInput')?.click())
+    this._el.querySelector('#composeMusicInput').addEventListener('change', e => this._pickComposeMusic(e.target))
     this._el.querySelector('#composeAudioInput').addEventListener('change', e => this._pickComposeAudio(e.target))
     this._el.querySelector('#composeCameraInput').addEventListener('change', e => this._pickComposeMedia(e.target))
     this._el.querySelector('#composeMediaInput').addEventListener('change', e => this._pickComposeMedia(e.target))
@@ -145,6 +171,7 @@ export class ConversationScreen {
     store.off('project-changed', this._onChange)
     this._hub?.dismiss()
     this._exportRail?.dismiss()
+    this._stopComposeMusic()
     this._endBubblePress()
   }
 
@@ -166,6 +193,7 @@ export class ConversationScreen {
 
     this._renderSpeakerStrip(p)
     this._renderCanvas(p, scene)
+    this._syncComposeMusicTools(p)
   }
 
   _renderSpeakerStrip(p) {
@@ -412,6 +440,7 @@ export class ConversationScreen {
     if (pill) pill.classList.toggle('open', this._audioToolsOpen)
     if (sub) sub.textContent = this._audioToolsOpen ? 'Ready for voice and media tools' : 'Hidden while typing'
     this._syncComposeMediaPreview()
+    this._syncComposeMusicTools()
   }
 
   async _toggleAudioRecording() {
@@ -507,6 +536,123 @@ export class ConversationScreen {
     }
     reader.readAsDataURL(file)
     input.value = ''
+  }
+
+  _pickComposeMusic(input) {
+    const file = input?.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const url = String(reader.result || '')
+      this._setComposeMusicSource(url, file.name)
+      store.updateRenderSettings(this.projectId, { music_path: url, music_title: file.name })
+    }
+    reader.readAsDataURL(file)
+    input.value = ''
+  }
+
+  _setComposeMusicSource(url, title) {
+    this._stopComposeMusic()
+    this._composeMusicUrl = url || ''
+    if (!url) {
+      this._syncComposeMusicTools()
+      return
+    }
+
+    const audio = new Audio(url)
+    this._composeMusicAudio = audio
+    audio.addEventListener('loadedmetadata', () => this._syncComposeMusicTools())
+    audio.addEventListener('timeupdate', () => this._syncComposeMusicTools())
+    audio.addEventListener('ended', () => this._syncComposeMusicTools())
+    audio.preload = 'metadata'
+    this._composeMusicTitle = title || 'Selected audio'
+    this._syncComposeMusicTools()
+  }
+
+  _syncComposeMusicTools(p = store.getProject(this.projectId)) {
+    const rs = p?.render_settings || {}
+    const title = this._el?.querySelector('#composeMusicTitle')
+    const sub = this._el?.querySelector('#composeMusicSub')
+    const now = this._el?.querySelector('#composeMusicNow')
+    const total = this._el?.querySelector('#composeMusicTotal')
+    const seek = this._el?.querySelector('#composeMusicSeek')
+    const playBtn = this._el?.querySelector('#composeMusicPlayBtn')
+    const rewindBtn = this._el?.querySelector('#composeMusicRewindBtn')
+    const url = this._composeMusicUrl || rs.music_path || ''
+    const musicTitle = rs.music_title || this._composeMusicTitle || (url ? 'Selected audio' : 'No audio selected')
+
+    if (title) title.textContent = musicTitle
+
+    if (!url) {
+      if (sub) sub.textContent = 'Pick a background track for this story'
+      if (now) now.textContent = '00:00.0'
+      if (total) total.textContent = '00:00'
+      if (seek) {
+        seek.value = '0'
+        seek.max = '0.1'
+      }
+      if (playBtn) playBtn.textContent = '▶'
+      if (rewindBtn) rewindBtn.disabled = true
+      return
+    }
+
+    if (!this._composeMusicAudio || this._composeMusicUrl !== url) {
+      this._setComposeMusicSource(url, musicTitle)
+      return
+    }
+
+    const audio = this._composeMusicAudio
+    const duration = Number.isFinite(audio.duration) ? audio.duration : 0.1
+    const current = Number.isFinite(audio.currentTime) ? audio.currentTime : 0
+    if (sub) sub.textContent = audio.paused ? 'Ready to preview this track' : 'Previewing background music'
+    if (now) now.textContent = this._formatMusicClock(current, true)
+    if (total) total.textContent = this._formatMusicClock(duration, false)
+    if (seek) {
+      seek.max = String(Math.max(0.1, duration))
+      seek.value = String(Math.min(current, duration))
+      if (!seek.dataset.bound) {
+        seek.dataset.bound = '1'
+        seek.addEventListener('input', () => {
+          if (!this._composeMusicAudio) return
+          this._composeMusicAudio.currentTime = Number(seek.value || 0)
+          this._syncComposeMusicTools()
+        })
+      }
+    }
+    if (playBtn) playBtn.textContent = audio.paused ? '▶' : '❚❚'
+    if (rewindBtn) rewindBtn.disabled = false
+  }
+
+  _toggleComposeMusicPlay() {
+    const audio = this._composeMusicAudio
+    if (!audio) {
+      this._snack('Pick audio first.')
+      return
+    }
+    if (audio.paused) {
+      audio.play().catch(() => this._snack('Could not play audio preview.'))
+    } else {
+      audio.pause()
+    }
+    this._syncComposeMusicTools()
+  }
+
+  _rewindComposeMusic() {
+    const audio = this._composeMusicAudio
+    if (!audio) return
+    audio.currentTime = Math.max(0, (audio.currentTime || 0) - 5)
+    this._syncComposeMusicTools()
+  }
+
+  _stopComposeMusic() {
+    try {
+      if (this._composeMusicAudio) {
+        this._composeMusicAudio.pause()
+        this._composeMusicAudio.src = ''
+      }
+    } catch {}
+    this._composeMusicAudio = null
+    this._composeMusicUrl = ''
   }
 
   _playPendingAudio() {
