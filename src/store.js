@@ -84,6 +84,7 @@ function sampleProject() {
         name: 'The Rooftop',
         quote: 'Some things don\'t need words.',
         status_bar: defaultStatusBar(),
+        actor_overrides: {},
         messages: [
           { id: uuid(), actor_id: mayaId, text: 'You actually showed up.',                           ts: now() },
           { id: uuid(), actor_id: alexId, text: 'I said I would.',                                   ts: now() + 1 },
@@ -183,7 +184,7 @@ class Store {
   createProject(name = 'New Story') {
     this._snapshot()
     const p = { ...sampleProject(), id: uuid(), name, created_at: now(), updated_at: now(), scenes: [], actors: [], groups: [] }
-    const firstScene = { id: uuid(), name: 'Scene 1', quote: '', status_bar: defaultStatusBar(), messages: [] }
+    const firstScene = { id: uuid(), name: 'Scene 1', quote: '', status_bar: defaultStatusBar(), actor_overrides: {}, messages: [] }
     p.scenes = [firstScene]
     p.active_scene_id = firstScene.id
     this._projects.unshift(p)
@@ -229,7 +230,7 @@ class Store {
     const p = this.getProject(projectId)
     if (!p) return null
     this._snapshot()
-    const s = { id: uuid(), name, quote: '', status_bar: defaultStatusBar(), messages: [] }
+    const s = { id: uuid(), name, quote: '', status_bar: defaultStatusBar(), actor_overrides: {}, messages: [] }
     p.scenes.push(s)
     p.updated_at = now()
     this._save()
@@ -248,6 +249,7 @@ class Store {
       ...src,
       id: uuid(),
       name: `${src.name} Copy`,
+      actor_overrides: { ...(src.actor_overrides || {}) },
       messages: (src.messages || []).map(m => ({ ...m, id: uuid() })),
     }
     p.scenes.push(copy)
@@ -318,6 +320,47 @@ class Store {
     p.updated_at = now()
     this._save()
     this._emit('project-changed', projectId)
+  }
+
+  updateSceneActorOverride(projectId, sceneId, actorId, patch) {
+    const p = this.getProject(projectId)
+    if (!p) return
+    const idx = p.scenes.findIndex(s => s.id === sceneId)
+    if (idx < 0) return
+    const actor = String(actorId || '').trim()
+    if (!actor) return
+
+    this._snapshot()
+    const scene = p.scenes[idx]
+    const overrides = { ...(scene.actor_overrides || {}) }
+    const next = { ...(overrides[actor] || {}) }
+
+    Object.entries(patch || {}).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === '') {
+        delete next[key]
+      } else {
+        next[key] = value
+      }
+    })
+
+    if (Object.keys(next).length) {
+      overrides[actor] = next
+    } else {
+      delete overrides[actor]
+    }
+
+    p.scenes[idx] = { ...scene, actor_overrides: overrides }
+    p.updated_at = now()
+    this._save()
+    this._emit('project-changed', projectId)
+  }
+
+  getEffectiveActor(projectId, sceneId, actorId) {
+    const p = this.getProject(projectId)
+    const scene = p?.scenes.find(s => s.id === sceneId)
+    const base = p?.actors.find(a => a.id === actorId) || {}
+    const override = scene?.actor_overrides?.[actorId] || {}
+    return { ...base, ...override }
   }
 
   getStatusTemplates() {

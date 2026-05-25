@@ -199,7 +199,7 @@ export class ProjectScreen {
     if (!messages.length) return ''
     const widths = ['58%', '42%', '65%', '48%', '56%']
     return messages.map((msg, i) => {
-      const actor = (project.actors || []).find(a => a.id === msg.actor_id)
+      const actor = store.getEffectiveActor(this.projectId, scene.id, msg.actor_id)
       const color = actor?.color || '#5f6678'
       const side = actor?.side === 'right' ? 'margin-left:auto;' : ''
       const width = widths[i % widths.length]

@@ -177,6 +177,8 @@ export class PlayScreen {
     }
 
     html += renderMessages(messages, p.actors, {
+      projectId: this.projectId,
+      sceneId: scene?.id,
       showNames: rs.show_names !== false,
       showTimestamps: rs.show_timestamps === true,
     })
@@ -231,7 +233,7 @@ export class PlayScreen {
 
       const localMs = playheadMs - elapsed
       const indicatorOnlyWindow = indicatorDur + fakeoutCost
-      const actor = (this._playCtx?.p?.actors || []).find(a => a.id === msg.actor_id)
+      const actor = store.getEffectiveActor(this.projectId, this._playCtx?.scene?.id, msg.actor_id)
 
       if (localMs < indicatorOnlyWindow) {
         return {
@@ -346,7 +348,7 @@ export class PlayScreen {
     }
 
     const msg      = this._msgQueue[this._msgIndex]
-    const actor    = p.actors.find(a => a.id === msg.actor_id)
+    const actor    = store.getEffectiveActor(this.projectId, scene?.id, msg.actor_id)
     const typingMs = (rs.typing_duration || 0.08) * 1000
     const indicMs  = (rs.typing_indicator_duration || 1.2) * 1000
     const pauseMs  = (rs.message_pause || 0.8) * 1000

@@ -282,6 +282,8 @@ export class ConversationScreen {
       : ''
 
     canvas.innerHTML = sceneHeader + renderMessages(scene.messages, p.actors, {
+      projectId: this.projectId,
+      sceneId: scene.id,
       showNames: rs.show_names !== false,
       showTimestamps: rs.show_timestamps === true,
     }) + sceneQuote

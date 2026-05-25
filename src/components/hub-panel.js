@@ -210,6 +210,20 @@ export class HubPanel {
     if (!scene) return '<p style="padding:20px;color:var(--t3);">No scene selected.</p>'
     const status = store.getSceneStatusBar(this.projectId, scene.id)
     const quick = store.getStatusQuickpicks()
+    const actorColorRows = (p.actors || []).map(actor => {
+      const effective = store.getEffectiveActor(this.projectId, scene.id, actor.id)
+      const overrideColor = scene?.actor_overrides?.[actor.id]?.color
+      return `
+        <div class="hub-list-item" style="margin-top:6px;">
+          <div class="avatar" style="width:30px;height:30px;font-size:12px;background:${effective.color || actor.color};">${(actor.name || '?')[0]}</div>
+          <div class="hub-list-text">
+            <div class="hub-list-title">${actor.name}</div>
+            <div class="hub-list-sub">Scene color override</div>
+          </div>
+          <input data-scene-actor-color="${actor.id}" type="color" value="${effective.color || actor.color}" style="width:28px;height:28px;border:0;background:transparent;padding:0;cursor:pointer;" />
+          <button data-scene-actor-reset="${actor.id}" type="button" style="margin-left:8px;border:0;background:transparent;color:${overrideColor ? 'var(--accent)' : 'var(--t4)'};font-size:12px;cursor:${overrideColor ? 'pointer' : 'default'};">↺ Reset</button>
+        </div>`
+    }).join('')
     return `
       <div class="form-field">
         <label>Scene Name</label>
@@ -218,6 +232,10 @@ export class HubPanel {
       <div class="form-field">
         <label>Quote / Subtitle</label>
         <input id="sceneQuoteInput" type="text" value="${scene.quote || ''}" placeholder="Optional scene quote…" />
+      </div>
+      <div class="form-field">
+        <label>Actor Colors (Scene)</label>
+        ${actorColorRows}
       </div>
       <div class="btn-primary" id="saveSceneBtn" style="margin-top:4px;">Save Scene</div>
       ${p.scenes.length > 1 ? `<div class="btn-danger" id="deleteSceneBtn">Delete Scene</div>` : ''}
@@ -382,6 +400,26 @@ export class HubPanel {
         const v = body.querySelector(map[field])?.value.trim()
         if (!v) return
         store.addStatusQuickpick(field, v)
+        refreshSceneTab()
+      })
+    })
+
+    body.querySelectorAll('[data-scene-actor-color]').forEach(input => {
+      input.addEventListener('input', () => {
+        const actorId = input.dataset.sceneActorColor
+        if (!actorId) return
+        store.updateSceneActorOverride(this.projectId, scene.id, actorId, { color: input.value })
+        refreshSceneTab()
+      })
+    })
+
+    body.querySelectorAll('[data-scene-actor-reset]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const actorId = btn.dataset.sceneActorReset
+        if (!actorId) return
+        const hasOverride = scene?.actor_overrides?.[actorId]?.color
+        if (!hasOverride) return
+        store.updateSceneActorOverride(this.projectId, scene.id, actorId, { color: null })
         refreshSceneTab()
       })
     })

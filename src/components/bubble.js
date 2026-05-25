@@ -1,12 +1,14 @@
+import { store } from '../store.js'
+
 /**
  * Renders message rows for a scene.
  * Groups consecutive messages from the same actor and applies
  * first/mid/last corner radius variants.
  */
-export function renderMessages(messages, actors, options = {}) {
-  if (typeof options === 'function') options = {}
-  const showNames = options.showNames !== false
-  const showTimestamps = options.showTimestamps === true
+export function renderMessages(messages, actors, opts = {}) {
+  if (typeof opts === 'function') opts = {}
+  const showNames = opts.showNames !== false
+  const showTimestamps = opts.showTimestamps === true
   if (!messages.length) {
     return `<div style="flex:1;display:flex;align-items:center;justify-content:center;padding:40px;">
       <p style="color:var(--t3);font-size:14px;text-align:center;">No messages yet.<br>Pick an actor below and start typing.</p>
@@ -24,7 +26,9 @@ export function renderMessages(messages, actors, options = {}) {
   }
 
   for (const group of groups) {
-    const actor = actorMap[group.actor_id] || fallbackActor
+    const actor = (opts.projectId && opts.sceneId)
+      ? (store.getEffectiveActor(opts.projectId, opts.sceneId, group.actor_id) || fallbackActor)
+      : (actorMap[group.actor_id] || fallbackActor)
     const isRight = actor.side === 'right'
     const colorRgb = hexToRgb(actor.color)
 
