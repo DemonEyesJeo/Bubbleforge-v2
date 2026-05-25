@@ -441,6 +441,7 @@ export class ConversationScreen {
 
     if (this._editingMsgId) {
       if (!text) {
+        this._snack('Message text cannot be empty when editing.')
         input.focus()
         return
       }
