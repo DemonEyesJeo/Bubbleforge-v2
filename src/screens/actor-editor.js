@@ -34,7 +34,7 @@ export class ActorEditorScreen {
     const canDelete = !this.isNew && (p?.actors?.length || 0) > 1
     const el = document.createElement('div')
     el.innerHTML = `
-      <div class="status-bar">${renderStatusBar(store.getSceneStatusBar(this.projectId, store.getActiveScene(this.projectId)?.id))}</div>
+      <div class="status-bar"><div id="statusBarHost">${renderStatusBar()}</div></div>
       <div class="nav-bar">
         <div class="nav-back" id="backBtn">${icons.back} Back</div>
         <div class="nav-center"><div class="nav-title">${this.isNew ? 'New Actor' : 'Edit Actor'}</div></div>
@@ -94,6 +94,7 @@ export class ActorEditorScreen {
   }
 
   bind() {
+    this._refreshStatusBar()
     this._el.querySelector('#backBtn').addEventListener('click', () => pop())
 
     const nameInput = this._el.querySelector('#nameInput')
@@ -147,6 +148,17 @@ export class ActorEditorScreen {
         this._snack('At least one actor is required.')
       }
     })
+  }
+
+  resume() {
+    this._refreshStatusBar()
+  }
+
+  _refreshStatusBar() {
+    const scene = store.getActiveScene(this.projectId)
+    const status = store.getSceneStatusBar(this.projectId, scene?.id)
+    const host = this._el.querySelector('#statusBarHost')
+    if (host) host.innerHTML = renderStatusBar(status)
   }
 
   _snack(msg) {

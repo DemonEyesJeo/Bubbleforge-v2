@@ -138,7 +138,7 @@ export class ProjectScreen {
       const messageCount = (scene.messages || []).length
       const coverRows = this._sceneCoverBubbles(scene, project)
       return `
-        <button class="project-card project-scene-card" data-scene-id="${scene.id}" type="button">
+        <div class="project-card project-scene-card" data-scene-id="${scene.id}" role="button" tabindex="0">
           <div class="project-cover" style="background:${this._coverGradientFromScene(scene, project)};">
             <div class="project-cover-overlay"></div>
             <div style="position:absolute;top:8px;right:8px;display:flex;gap:6px;z-index:2;">
@@ -153,12 +153,12 @@ export class ProjectScreen {
             </div>
             <div class="project-kind-pill">${kindLabel}</div>
           </div>
-        </button>
+        </div>
       `
     }).join('')
 
     list.querySelectorAll('.project-scene-card').forEach(row => {
-      row.addEventListener('click', () => {
+      const openScene = () => {
         const sceneId = row.dataset.sceneId
         if (!sceneId) return
         store.setActiveScene(this.projectId, sceneId)
@@ -168,6 +168,13 @@ export class ProjectScreen {
           return
         }
         this._refresh()
+      }
+
+      row.addEventListener('click', openScene)
+      row.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return
+        e.preventDefault()
+        openScene()
       })
     })
 
@@ -256,13 +263,15 @@ export class ProjectScreen {
     })
 
     sheet.querySelector('#sceneDeleteBtn')?.addEventListener('click', () => {
-      const ok = window.confirm(`Delete "${scene.name || 'Scene'}"?`)
-      if (!ok) return
-      const deleted = store.deleteScene(this.projectId, sceneId)
-      if (!deleted) {
+      const current = store.getProject(this.projectId)
+      if ((current?.scenes?.length || 0) <= 1) {
+        this._snack('A story must have at least one scene.')
         close()
         return
       }
+      const ok = window.confirm(`Delete "${scene.name || 'Scene'}"?`)
+      if (!ok) return
+      store.deleteScene(this.projectId, sceneId)
       close()
     })
 
@@ -284,5 +293,17 @@ export class ProjectScreen {
       overlay.remove()
       sheet.remove()
     }, 220)
+  }
+
+  _snack(msg) {
+    const s = document.createElement('div')
+    s.className = 'snackbar'
+    s.textContent = msg
+    this._el.appendChild(s)
+    setTimeout(() => {
+      s.style.opacity = '0'
+      s.style.transition = 'opacity 0.25s'
+      setTimeout(() => s.remove(), 280)
+    }, 2200)
   }
 }

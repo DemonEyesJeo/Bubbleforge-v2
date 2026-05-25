@@ -57,6 +57,9 @@ export class PlayScreen {
 
     const rs    = p.render_settings || {}
     const scene = store.getActiveScene(this.projectId)
+    const status = store.getSceneStatusBar(this.projectId, scene?.id)
+    const statusHost = this._el.querySelector('#statusBarHost')
+    if (statusHost) statusHost.innerHTML = renderStatusBar(status)
 
     // Build message queue
     this._msgQueue = scene?.messages || []
