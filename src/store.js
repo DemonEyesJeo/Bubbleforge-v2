@@ -292,8 +292,20 @@ class Store {
   deleteActor(projectId, actorId) {
     const p = this.getProject(projectId)
     if (!p) return
+    if ((p.actors || []).length <= 1) return
     this._snapshot()
-    p.actors = p.actors.filter(a => a.id !== actorId)
+    const remaining = p.actors.filter(a => a.id !== actorId)
+    const fallbackActorId = remaining[0]?.id || null
+
+    p.actors = remaining
+    p.scenes = p.scenes.map(scene => ({
+      ...scene,
+      messages: (scene.messages || []).map(msg => (
+        msg.actor_id === actorId && fallbackActorId
+          ? { ...msg, actor_id: fallbackActorId }
+          : msg
+      )),
+    }))
     p.updated_at = now()
     this._save()
     this._emit('project-changed', projectId)
