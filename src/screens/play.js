@@ -131,7 +131,7 @@ export class PlayScreen {
       if (!scrubbing) return
       applyScrub(e.clientX)
       scrubbing = false
-      if (resumeAfterScrub) {
+      if (resumeAfterScrub && this._msgIndex < this._msgQueue.length) {
         this._startPlayback(p, scene, rs)
       }
       resumeAfterScrub = false
