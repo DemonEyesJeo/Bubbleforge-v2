@@ -64,6 +64,13 @@ export class HomeScreen {
                 </div>
                 <div class="home-setting-pill ghost">Soon</div>
               </div>
+              <div class="home-setting-row muted">
+                <div>
+                  <div class="home-setting-title">Restore purchases</div>
+                  <div class="home-setting-sub">Coming soon</div>
+                </div>
+                <div class="home-setting-pill ghost">Soon</div>
+              </div>
               <div class="home-setting-row">
                 <div>
                   <div class="home-setting-title">Credits & licenses</div>
@@ -71,7 +78,15 @@ export class HomeScreen {
                 </div>
                 <div class="home-setting-pill">Open</div>
               </div>
+              <div class="home-setting-row premium">
+                <div>
+                  <div class="home-setting-title">Upgrade to PRO</div>
+                  <div class="home-setting-sub">Unlock advanced controls later</div>
+                </div>
+                <div class="home-setting-pill">Upgrade</div>
+              </div>
             </div>
+            <div class="home-settings-footer">Version 2.0.0</div>
           </div>
         </div>
       </div>
@@ -276,6 +291,8 @@ export class HomeScreen {
           this._snack('Support email is not wired yet in v2.')
         } else if (title === 'Credits & licenses') {
           this._snack('Credits panel is not wired yet in v2.')
+        } else if (title === 'Upgrade to PRO') {
+          this._snack('PRO upgrade is not wired yet in v2.')
         }
       })
     })

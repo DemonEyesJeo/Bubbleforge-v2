@@ -321,6 +321,9 @@ body {
   background: var(--s1);
 }
 .home-setting-row.muted { opacity: 0.75; }
+.home-setting-row.premium {
+  background: linear-gradient(135deg, rgba(61,139,255,0.12), rgba(32,96,238,0.08));
+}
 .home-setting-title { color: var(--t1); font-size: 14px; font-weight: 600; }
 .home-setting-sub { color: var(--t3); font-size: 12px; margin-top: 2px; }
 .home-setting-pill {
@@ -335,6 +338,12 @@ body {
 .home-setting-pill.ghost {
   background: var(--s2);
   color: var(--t3);
+}
+.home-settings-footer {
+  padding: 8px 22px 18px;
+  color: var(--t3);
+  font-size: 12px;
+  text-align: center;
 }
 
 .home-bottom-nav {
