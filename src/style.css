@@ -782,6 +782,23 @@ body {
   justify-content: center;
   cursor: pointer;
 }
+.audio-pill-volume {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.audio-pill-volume-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--t3);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.audio-pill-volume-slider {
+  width: 100%;
+  accent-color: var(--accent);
+}
 .audio-pill-music-time {
   display: flex;
   justify-content: space-between;

@@ -80,6 +80,13 @@ export class ConversationScreen {
                   <button class="audio-pill-mini-btn" id="composeMusicRewindBtn" type="button">${icons.rewind}</button>
                   <button class="audio-pill-mini-btn" id="composeMusicClearBtn" type="button">✕</button>
                 </div>
+                <div class="audio-pill-volume">
+                  <div class="audio-pill-volume-head">
+                    <span>Music volume</span>
+                    <span id="composeMusicVolumeLabel">70%</span>
+                  </div>
+                  <input class="audio-pill-volume-slider" id="composeMusicVolume" type="range" min="0" max="100" step="1" value="70" />
+                </div>
                 <div class="audio-pill-music-time">
                   <span id="composeMusicNow">00:00.0</span>
                   <span id="composeMusicTotal">00:00</span>
@@ -124,6 +131,7 @@ export class ConversationScreen {
     this._el.querySelector('#composeMusicPlayBtn').addEventListener('click', () => this._toggleComposeMusicPlay())
     this._el.querySelector('#composeMusicRewindBtn').addEventListener('click', () => this._rewindComposeMusic())
     this._el.querySelector('#composeMusicClearBtn').addEventListener('click', () => this._clearComposeMusic())
+    this._el.querySelector('#composeMusicVolume').addEventListener('input', e => this._setComposeMusicVolume(e.target))
     this._el.querySelector('#audioAttachBtn').addEventListener('click', () => this._el.querySelector('#composeAudioInput')?.click())
     this._el.querySelector('#audioRecordBtn').addEventListener('click', () => this._toggleAudioRecording())
     this._el.querySelector('#cameraBtn').addEventListener('click', () => this._el.querySelector('#composeCameraInput')?.click())
@@ -590,10 +598,15 @@ export class ConversationScreen {
     const seek = this._el?.querySelector('#composeMusicSeek')
     const playBtn = this._el?.querySelector('#composeMusicPlayBtn')
     const rewindBtn = this._el?.querySelector('#composeMusicRewindBtn')
+    const volume = this._el?.querySelector('#composeMusicVolume')
+    const volumeLabel = this._el?.querySelector('#composeMusicVolumeLabel')
     const url = rs.music_path || this._composeMusicUrl || ''
     const musicTitle = rs.music_title || this._composeMusicTitle || (url ? 'Selected audio' : 'No audio selected')
+    const musicVolume = Number.isFinite(Number(rs.music_volume)) ? Math.max(0, Math.min(1, Number(rs.music_volume))) : 0.7
 
     if (title) title.textContent = musicTitle
+    if (volume) volume.value = String(Math.round(musicVolume * 100))
+    if (volumeLabel) volumeLabel.textContent = `${Math.round(musicVolume * 100)}%`
 
     if (!url) {
       if (sub) sub.textContent = 'Pick a background track for this story'
@@ -618,6 +631,7 @@ export class ConversationScreen {
     }
 
     const audio = this._composeMusicAudio
+    audio.volume = musicVolume
     const duration = Number.isFinite(audio.duration) ? audio.duration : 0.1
     const current = Number.isFinite(audio.currentTime) ? audio.currentTime : 0
     const recording = Boolean(this._audioRecorder && this._audioRecorder.state === 'recording')
@@ -648,6 +662,14 @@ export class ConversationScreen {
       playBtn.disabled = recording
     }
     if (rewindBtn) rewindBtn.disabled = recording
+  }
+
+  _setComposeMusicVolume(input) {
+    const raw = Number(input?.value || 0)
+    const volume = Math.max(0, Math.min(100, raw)) / 100.0
+    store.updateRenderSettings(this.projectId, { music_volume: volume })
+    if (this._composeMusicAudio) this._composeMusicAudio.volume = volume
+    this._syncComposeMusicTools()
   }
 
   _toggleComposeMusicPlay() {
