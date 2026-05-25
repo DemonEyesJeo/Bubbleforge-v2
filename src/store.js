@@ -70,6 +70,7 @@ class Store {
   constructor() {
     this._projects = []
     this._listeners = {}
+    this._history = []
     this._load()
   }
 
@@ -86,6 +87,25 @@ class Store {
 
   _save() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(this._projects))
+  }
+
+  _snapshot() {
+    this._history.push(JSON.stringify(this._projects))
+    if (this._history.length > 25) this._history.shift()
+  }
+
+  undoLastChange() {
+    const previous = this._history.pop()
+    if (!previous) return false
+    try {
+      this._projects = JSON.parse(previous)
+      this._save()
+      this._emit('projects-changed')
+      this._emit('project-changed')
+      return true
+    } catch {
+      return false
+    }
   }
 
   // ── Events ───────────────────────────────────
@@ -107,6 +127,7 @@ class Store {
   getProject(id) { return this._projects.find(p => p.id === id) || null }
 
   createProject(name = 'New Story') {
+    this._snapshot()
     const p = { ...sampleProject(), id: uuid(), name, created_at: now(), updated_at: now(), scenes: [], actors: [] }
     const firstScene = { id: uuid(), name: 'Scene 1', quote: '', messages: [] }
     p.scenes = [firstScene]
@@ -120,12 +141,14 @@ class Store {
   updateProject(id, patch) {
     const idx = this._projects.findIndex(p => p.id === id)
     if (idx < 0) return
+    this._snapshot()
     this._projects[idx] = { ...this._projects[idx], ...patch, updated_at: now() }
     this._save()
     this._emit('project-changed', id)
   }
 
   deleteProject(id) {
+    this._snapshot()
     this._projects = this._projects.filter(p => p.id !== id)
     this._save()
     this._emit('projects-changed')
@@ -146,6 +169,7 @@ class Store {
   addScene(projectId, name = 'New Scene') {
     const p = this.getProject(projectId)
     if (!p) return null
+    this._snapshot()
     const s = { id: uuid(), name, quote: '', messages: [] }
     p.scenes.push(s)
     p.updated_at = now()
@@ -159,6 +183,7 @@ class Store {
     if (!p) return
     const idx = p.scenes.findIndex(s => s.id === sceneId)
     if (idx < 0) return
+    this._snapshot()
     p.scenes[idx] = { ...p.scenes[idx], ...patch }
     p.updated_at = now()
     this._save()
@@ -168,6 +193,7 @@ class Store {
   deleteScene(projectId, sceneId) {
     const p = this.getProject(projectId)
     if (!p || p.scenes.length <= 1) return
+    this._snapshot()
     p.scenes = p.scenes.filter(s => s.id !== sceneId)
     if (p.active_scene_id === sceneId) p.active_scene_id = p.scenes[0].id
     p.updated_at = now()
@@ -185,6 +211,7 @@ class Store {
     if (!p) return null
     const scene = p.scenes.find(s => s.id === sceneId)
     if (!scene) return null
+    this._snapshot()
     const msg = { id: uuid(), actor_id: actorId, text: text.trim(), ts: now() }
     scene.messages.push(msg)
     p.updated_at = now()
@@ -200,6 +227,7 @@ class Store {
     if (!scene) return
     const idx = scene.messages.findIndex(m => m.id === msgId)
     if (idx < 0) return
+    this._snapshot()
     scene.messages[idx] = { ...scene.messages[idx], ...patch }
     p.updated_at = now()
     this._save()
@@ -211,6 +239,7 @@ class Store {
     if (!p) return
     const scene = p.scenes.find(s => s.id === sceneId)
     if (!scene) return
+    this._snapshot()
     scene.messages = scene.messages.filter(m => m.id !== msgId)
     p.updated_at = now()
     this._save()
@@ -221,6 +250,7 @@ class Store {
   addActor(projectId, name, color, side = 'left') {
     const p = this.getProject(projectId)
     if (!p) return null
+    this._snapshot()
     const actor = { id: uuid(), name, color, side, avatar: null }
     p.actors.push(actor)
     p.updated_at = now()
@@ -234,6 +264,7 @@ class Store {
     if (!p) return
     const idx = p.actors.findIndex(a => a.id === actorId)
     if (idx < 0) return
+    this._snapshot()
     p.actors[idx] = { ...p.actors[idx], ...patch }
     p.updated_at = now()
     this._save()
@@ -243,6 +274,7 @@ class Store {
   deleteActor(projectId, actorId) {
     const p = this.getProject(projectId)
     if (!p) return
+    this._snapshot()
     p.actors = p.actors.filter(a => a.id !== actorId)
     p.updated_at = now()
     this._save()
@@ -253,6 +285,7 @@ class Store {
   updateRenderSettings(projectId, patch) {
     const p = this.getProject(projectId)
     if (!p) return
+    this._snapshot()
     p.render_settings = { ...p.render_settings, ...patch }
     p.updated_at = now()
     this._save()

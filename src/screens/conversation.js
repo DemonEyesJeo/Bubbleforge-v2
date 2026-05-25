@@ -28,6 +28,7 @@ export class ConversationScreen {
           <div class="nav-sub" id="sceneSub"></div>
         </div>
         <div class="nav-actions">
+          <div class="nav-btn" id="undoBtn" title="Undo">${icons.undo}</div>
           <div class="nav-btn" id="playBtn" title="Preview">${icons.play}</div>
           <div class="nav-btn" id="menuBtn" title="Menu">${icons.dots}</div>
         </div>
@@ -48,6 +49,9 @@ export class ConversationScreen {
     store.on('project-changed', this._onChange)
 
     this._el.querySelector('#backBtn').addEventListener('click', () => pop())
+    this._el.querySelector('#undoBtn').addEventListener('click', () => {
+      if (store.undoLastChange()) this._refresh()
+    })
     this._el.querySelector('#playBtn').addEventListener('click', () => {
       push('play', { projectId: this.projectId })
     })
