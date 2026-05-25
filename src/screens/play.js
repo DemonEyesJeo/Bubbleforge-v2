@@ -20,6 +20,7 @@ export class PlayScreen {
     this._totalMs = 0
     this._timelineMs = []
     this._removeScrubListeners = null
+    this._playheadMs = 0
   }
 
   render() {
@@ -170,6 +171,7 @@ export class PlayScreen {
       this._msgIndex = 0
       this._shownMessages = []
       this._elapsedMs = 0
+      this._playheadMs = 0
       this._renderCanvas(p, scene, [])
     }
     this._playing = true
@@ -224,16 +226,27 @@ export class PlayScreen {
     }
     const hideTyping = () => canvas.querySelectorAll('.typing-row').forEach(r => r.remove())
 
+    const setProgress = () => {
+      const pct = Math.max(0, Math.min(1, this._playheadMs / this._totalMs))
+      this._el.querySelector('#progressFill').style.width = `${pct * 100}%`
+      this._el.querySelector('#timeCurrent').textContent = this._formatTime(this._playheadMs / 1000)
+    }
+
     // 1. Show typing indicator
     showTyping()
     this._animTimeout = setTimeout(() => {
       if (!this._playing) return
+
+      this._playheadMs += indicMs
+      setProgress()
 
       if (fakeout && this._msgIndex > 0) {
         // Fakeout: hide briefly, show again
         hideTyping()
         this._animTimeout = setTimeout(() => {
           if (!this._playing) return
+          this._playheadMs += (rs.typing_indicator_gap || 0.4) * 1000
+          setProgress()
           showTyping()
           this._animTimeout = setTimeout(() => this._typeMessage(p, scene, rs, msg, actor, typingMs, pauseMs), indicMs * 0.6)
         }, (rs.typing_indicator_gap || 0.4) * 1000)
@@ -250,6 +263,7 @@ export class PlayScreen {
 
     let charIdx = 0
     const chars = msg.text.split('')
+    const charMs = rs.typing_duration || 0.08
 
     const typeNext = () => {
       if (!this._playing) return
@@ -260,11 +274,10 @@ export class PlayScreen {
         this._msgIndex++
         this._renderCanvas(p, scene, this._shownMessages)
 
-        // Update progress
-        const pct = this._msgIndex / this._msgQueue.length
+        this._playheadMs += pauseMs
+        const pct = Math.max(0, Math.min(1, this._playheadMs / this._totalMs))
         this._el.querySelector('#progressFill').style.width = `${pct * 100}%`
-        const elapsed = pct * (this._totalMs / 1000)
-        this._el.querySelector('#timeCurrent').textContent = this._formatTime(elapsed)
+        this._el.querySelector('#timeCurrent').textContent = this._formatTime(this._playheadMs / 1000)
 
         this._kb?.hide()
         this._animTimeout = setTimeout(() => this._runNext(p, scene, rs), pauseMs)
@@ -275,6 +288,11 @@ export class PlayScreen {
       this._kb?.pressKey(ch)
       this._setGhostText(chars.slice(0, charIdx).join(''))
       if (charIdx === 1) this._kb?.show()
+
+      this._playheadMs += typingMs
+      const pct = Math.max(0, Math.min(1, this._playheadMs / this._totalMs))
+      this._el.querySelector('#progressFill').style.width = `${pct * 100}%`
+      this._el.querySelector('#timeCurrent').textContent = this._formatTime(this._playheadMs / 1000)
 
       this._animTimeout = setTimeout(typeNext, typingMs + (Math.random() * typingMs * 0.4))
     }
