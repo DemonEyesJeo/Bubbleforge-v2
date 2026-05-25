@@ -30,6 +30,7 @@ export class ActorEditorScreen {
       this._side  = p?.actors.some(a => a.side === 'left') ? 'right' : 'left'
     }
 
+    const canDelete = !this.isNew && (p?.actors?.length || 0) > 1
     const el = document.createElement('div')
     el.innerHTML = `
       <div class="status-bar"><span class="time">9:41</span>${statusIcons()}</div>
@@ -85,7 +86,8 @@ export class ActorEditorScreen {
         <div class="btn-primary" id="saveBtn" style="margin-top:20px;">
           ${this.isNew ? 'Add Actor' : 'Save Changes'}
         </div>
-        ${!this.isNew ? `<div class="btn-danger" id="deleteBtn">Remove Actor</div>` : ''}
+        ${canDelete ? `<div class="btn-danger" id="deleteBtn">Remove Actor</div>` : ''}
+        ${!this.isNew && !canDelete ? `<div style="margin:12px 20px 0;color:var(--t3);font-size:12px;text-align:center;">A story must keep at least one actor.</div>` : ''}
       </div>`
     return el
   }
