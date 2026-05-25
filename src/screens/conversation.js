@@ -312,10 +312,12 @@ export class ConversationScreen {
   _showBubbleMenu(bub, p, scene) {
     document.querySelectorAll('.bubble-menu').forEach(m => m.remove())
     const msgId = bub.dataset.msgId
+    const msg = scene.messages.find(m => m.id === msgId)
+    const canEditText = Boolean((msg?.text || '').trim())
     const menu = document.createElement('div')
     menu.className = 'bubble-menu fade-in'
     menu.innerHTML = `
-      <div class="bubble-menu-item" data-action="edit">Edit</div>
+      ${canEditText ? '<div class="bubble-menu-item" data-action="edit">Edit</div>' : ''}
       <div class="bubble-menu-item" data-action="actor">Change actor</div>
       <div class="bubble-menu-item danger" data-action="delete">Delete</div>`
 
@@ -333,11 +335,11 @@ export class ConversationScreen {
       store.deleteMessage(this.projectId, scene.id, msgId)
       menu.remove()
     })
-    menu.querySelector('[data-action="edit"]').addEventListener('click', () => {
-      const msg = scene.messages.find(m => m.id === msgId)
-      if (!msg) return menu.remove()
+    menu.querySelector('[data-action="edit"]')?.addEventListener('click', () => {
+      const nextMsg = scene.messages.find(m => m.id === msgId)
+      if (!nextMsg) return menu.remove()
       const input = this._el.querySelector('#composeInput')
-      input.value = msg.text
+      input.value = nextMsg.text
       input.dispatchEvent(new Event('input'))
       this._editingMsgId = msgId
       this._editingSceneId = scene.id
