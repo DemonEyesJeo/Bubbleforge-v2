@@ -20,6 +20,8 @@ export class ConversationScreen {
     this._audioRecorder = null
     this._audioChunks = []
     this._audioStream = null
+    this._audioRecordStart = 0
+    this._audioRecordTick = null
     this._composeMusicAudio = null
     this._composeMusicRaf = null
     this._composeMusicUrl = ''
@@ -461,6 +463,7 @@ export class ConversationScreen {
       this._audioStream = await navigator.mediaDevices.getUserMedia({ audio: true })
       this._audioChunks = []
       this._audioRecorder = new MediaRecorder(this._audioStream)
+      this._audioRecordStart = performance.now()
       this._audioRecorder.ondataavailable = event => {
         if (event.data && event.data.size > 0) this._audioChunks.push(event.data)
       }
@@ -477,9 +480,11 @@ export class ConversationScreen {
         reader.readAsDataURL(blob)
       }
       this._audioRecorder.start()
+      this._audioRecordTick = window.setInterval(() => this._syncComposeMusicTools(), 100)
       this._snack('Recording voice note...')
       const btn = this._el.querySelector('#audioRecordBtn')
       if (btn) btn.textContent = 'Stop'
+      this._syncComposeMusicTools()
     } catch {
       this._stopAudioStream()
       this._snack('Could not access microphone.')
@@ -492,6 +497,9 @@ export class ConversationScreen {
     } catch {}
     this._audioStream = null
     this._audioRecorder = null
+    this._audioRecordStart = 0
+    if (this._audioRecordTick) clearInterval(this._audioRecordTick)
+    this._audioRecordTick = null
     const btn = this._el.querySelector('#audioRecordBtn')
     if (btn) btn.textContent = 'Record'
   }
@@ -612,13 +620,20 @@ export class ConversationScreen {
     const audio = this._composeMusicAudio
     const duration = Number.isFinite(audio.duration) ? audio.duration : 0.1
     const current = Number.isFinite(audio.currentTime) ? audio.currentTime : 0
-    if (sub) sub.textContent = audio.paused ? 'Ready to preview this track' : 'Previewing background music'
-    if (now) now.textContent = this._formatMusicClock(current, true)
-    if (total) total.textContent = this._formatMusicClock(duration, false)
+    const recording = Boolean(this._audioRecorder && this._audioRecorder.state === 'recording')
+    if (sub) sub.textContent = recording ? 'Recording voice note...' : (audio.paused ? 'Ready to preview this track' : 'Previewing background music')
+    if (recording) {
+      const heldFor = Math.max(0, (performance.now() - this._audioRecordStart) / 1000)
+      if (now) now.textContent = this._formatMusicClock(heldFor, true)
+      if (total) total.textContent = 'REC'
+    } else {
+      if (now) now.textContent = this._formatMusicClock(current, true)
+      if (total) total.textContent = this._formatMusicClock(duration, false)
+    }
     if (seek) {
       seek.max = String(Math.max(0.1, duration))
       seek.value = String(Math.min(current, duration))
-      seek.disabled = Boolean(this._audioRecorder && this._audioRecorder.state === 'recording')
+      seek.disabled = recording
       if (!seek.dataset.bound) {
         seek.dataset.bound = '1'
         seek.addEventListener('input', () => {
@@ -630,9 +645,9 @@ export class ConversationScreen {
     }
     if (playBtn) {
       playBtn.textContent = audio.paused ? '▶' : '❚❚'
-      playBtn.disabled = Boolean(this._audioRecorder && this._audioRecorder.state === 'recording')
+      playBtn.disabled = recording
     }
-    if (rewindBtn) rewindBtn.disabled = Boolean(this._audioRecorder && this._audioRecorder.state === 'recording')
+    if (rewindBtn) rewindBtn.disabled = recording
   }
 
   _toggleComposeMusicPlay() {
