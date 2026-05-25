@@ -10,6 +10,24 @@ Chat-style story export app. Build cinematic conversations, export MP4 videos, P
 
 ## Development
 
+### Run Today (Two Terminals)
+
+```bash
+# Terminal 1 (frontend)
+npm install
+npm run dev:local
+# -> http://127.0.0.1:5173
+
+# Terminal 2 (backend)
+pip install -r backend/requirements.txt
+npm run backend
+
+# Optional backend check
+npm run health
+```
+
+If you use a virtual environment, activate it before `npm run backend` so Flask/Pillow/moviepy are available.
+
 ```bash
 # Install deps
 npm install

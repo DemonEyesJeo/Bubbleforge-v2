@@ -4,8 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "vite",
+    "dev:local": "vite --host 127.0.0.1 --port 5173",
     "build": "vite build",
     "preview": "vite preview",
+    "backend": "python backend/server.py",
+    "health": "curl -s http://localhost:5000/api/health",
     "android": "vite build && npx cap sync android && npx cap open android"
   },
   "devDependencies": {
