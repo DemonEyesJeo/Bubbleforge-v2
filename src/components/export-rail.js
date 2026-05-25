@@ -9,6 +9,7 @@ export class ExportRail {
     this.activeTab = 'keyboard'
     this._pollTimer = null
     this._exportState = null
+    this._interactionCleanups = []
   }
 
   mount() {
@@ -49,6 +50,7 @@ export class ExportRail {
 
   dismiss() {
     this._stopPolling()
+    this._clearInteractionListeners()
     this._overlay.classList.remove('visible')
     this._rail.classList.remove('visible')
     setTimeout(() => {
@@ -127,6 +129,8 @@ export class ExportRail {
   }
 
   _bindInteractions(body, tab) {
+    this._clearInteractionListeners()
+
     if (tab === 'audio') {
       body.querySelector('#pickMusicBtn')?.addEventListener('click', () => this._pickMusicFile())
       body.querySelector('#clearMusicBtn')?.addEventListener('click', () => {
@@ -184,11 +188,30 @@ export class ExportRail {
 
       track.addEventListener('mousedown', e => { dragging = true; update(e) })
       track.addEventListener('touchstart', e => { dragging = true; update(e) }, { passive: true })
-      window.addEventListener('mousemove', e => { if (dragging) update(e) })
-      window.addEventListener('touchmove', e => { if (dragging) update(e) }, { passive: true })
-      window.addEventListener('mouseup', () => dragging = false)
-      window.addEventListener('touchend', () => dragging = false)
+      const onMouseMove = (e) => { if (dragging) update(e) }
+      const onTouchMove = (e) => { if (dragging) update(e) }
+      const onMouseUp = () => { dragging = false }
+      const onTouchEnd = () => { dragging = false }
+
+      window.addEventListener('mousemove', onMouseMove)
+      window.addEventListener('touchmove', onTouchMove, { passive: true })
+      window.addEventListener('mouseup', onMouseUp)
+      window.addEventListener('touchend', onTouchEnd)
+
+      this._interactionCleanups.push(() => {
+        window.removeEventListener('mousemove', onMouseMove)
+        window.removeEventListener('touchmove', onTouchMove)
+        window.removeEventListener('mouseup', onMouseUp)
+        window.removeEventListener('touchend', onTouchEnd)
+      })
     })
+  }
+
+  _clearInteractionListeners() {
+    this._interactionCleanups.forEach(fn => {
+      try { fn() } catch { /* ignore cleanup errors */ }
+    })
+    this._interactionCleanups = []
   }
 
   async _pickMusicFile() {
