@@ -63,15 +63,6 @@ export class PlayScreen {
 
     this._applyTheme(rs)
 
-    // Set up keyboard overlay
-    if (rs.keyboard_style !== 'off' && rs.keyboard_style) {
-      this._kb = new KeyboardOverlay(
-        this._el.querySelector('#kbPlaceholder'),
-        rs.keyboard_style
-      )
-      this._kb.mount()
-    }
-
     // Render initial empty canvas with scene header
     this._renderCanvas(p, scene, [])
 
@@ -295,8 +286,19 @@ export class PlayScreen {
     }
     this._playing = true
     this._el.querySelector('#playBtn').innerHTML = icons.pause
-    if (rs.typing_animation !== false) this._kb?.show()
-    else this._kb?.hide()
+    if (!this._kb && rs.keyboard_style !== 'off' && rs.keyboard_style) {
+      this._kb = new KeyboardOverlay(
+        this._el.querySelector('#kbPlaceholder'),
+        rs.keyboard_style
+      )
+    }
+    if (rs.typing_animation !== false) {
+      this._kb?.show()
+      this._setKeyboardActive(true)
+    } else {
+      this._kb?.hide()
+      this._setKeyboardActive(false)
+    }
     this._runNext(p, scene, rs)
   }
 
@@ -310,7 +312,17 @@ export class PlayScreen {
     this._playing = false
     clearTimeout(this._animTimeout)
     this._setGhostText('')
-    this._kb?.hide()
+    this._setKeyboardActive(false)
+    const playBtn = this._el?.querySelector('#playBtn')
+    if (playBtn) playBtn.innerHTML = icons.play
+    this._kb?.destroy()
+    this._kb = null
+  }
+
+  _setKeyboardActive(active) {
+    const placeholder = this._el?.querySelector('#kbPlaceholder')
+    if (!placeholder) return
+    placeholder.classList.toggle('kb-active', Boolean(active))
   }
 
   _setGhostText(text) {
@@ -325,6 +337,7 @@ export class PlayScreen {
     if (this._msgIndex >= this._msgQueue.length) {
       this._pausePlayback()
       this._kb?.hide()
+      this._setKeyboardActive(false)
       return
     }
 
@@ -361,7 +374,7 @@ export class PlayScreen {
       this._playheadMs += indicMs
       setProgress()
 
-      if (fakeout && this._msgIndex > 0) {
+      if (fakeout && this._msgIndex > 0 && Math.random() < 0.35) {
         // Fakeout: hide briefly, show again
         hideTyping()
         this._animTimeout = setTimeout(() => {
@@ -393,6 +406,7 @@ export class PlayScreen {
     this._el.querySelector('#timeCurrent').textContent = this._formatTime(this._playheadMs / 1000)
 
     this._kb?.hide()
+    this._setKeyboardActive(false)
     this._animTimeout = setTimeout(() => this._runNext(p, scene, rs), pauseMs)
   }
 
@@ -415,7 +429,10 @@ export class PlayScreen {
       const ch = chars[charIdx++]
       this._kb?.pressKey(ch)
       this._setGhostText(chars.slice(0, charIdx).join(''))
-      if (charIdx === 1) this._kb?.show()
+      if (charIdx === 1) {
+        this._kb?.show()
+        this._setKeyboardActive(true)
+      }
 
       this._playheadMs += typingMs
       const pct = Math.max(0, Math.min(1, this._playheadMs / this._totalMs))

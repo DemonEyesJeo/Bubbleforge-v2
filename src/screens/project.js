@@ -28,12 +28,6 @@ export class ProjectScreen {
         <div style="width:72px;"></div>
       </div>
       <div class="project-body">
-        <div class="project-hero">
-          <div class="project-kicker">Story Builder</div>
-          <h2 id="projectStoryName">Untitled Story</h2>
-          <div class="project-meta" id="projectMeta"></div>
-        </div>
-
         <div class="project-actions">
           <button class="project-action-card primary" id="projectConversationBtn" type="button">
             <div class="project-action-icon">${icons.scene}</div>
@@ -94,8 +88,6 @@ export class ProjectScreen {
 
     this._el.querySelector('#projectNavTitle').textContent = project.name || 'Project'
     this._el.querySelector('#projectNavSub').textContent = `${sceneCount} scene${sceneCount === 1 ? '' : 's'} · ${messageCount} messages`
-    this._el.querySelector('#projectStoryName').textContent = project.name || 'Untitled Story'
-    this._el.querySelector('#projectMeta').textContent = scene ? `Active scene: ${scene.name || 'Scene'}` : 'No active scene'
     this._renderSceneList(project)
   }
 

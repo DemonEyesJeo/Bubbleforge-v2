@@ -16,7 +16,7 @@ register('play',         PlayScreen)
 
 // Boot into the last opened project when available; otherwise go to home.
 if (!currentScreen()) {
-	const lastProjectId = store.getLastOpenedProjectId()
-	if (lastProjectId) push('project', { projectId: lastProjectId })
-	else push('home')
+  push('home')
+  const lastProjectId = store.getLastOpenedProjectId()
+  if (lastProjectId) push('project', { projectId: lastProjectId })
 }
