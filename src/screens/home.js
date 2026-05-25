@@ -6,6 +6,7 @@ export class HomeScreen {
   constructor() {
     this._onChange = () => this._refreshList()
     this._activeTab = 'projects'
+    this._characterSort = 'name'
   }
 
   render() {
@@ -29,6 +30,11 @@ export class HomeScreen {
             <div class="scroll-body" id="projectList" style="padding-bottom:24px;"></div>
           </div>
           <div class="home-pane" data-pane="characters">
+            <div class="home-pane-actions">
+              <div class="home-pane-action ghost" id="groupsBtn">Groups</div>
+              <div class="home-pane-action" id="sortActorsBtn">${this._characterSort === 'name' ? 'Sort: Name' : 'Sort: Story'}</div>
+              <div class="home-pane-action add" id="addActorBtn">${icons.add}</div>
+            </div>
             <div class="home-pane-title">Actors</div>
             <div class="home-pane-sub">All actors across your stories</div>
             <div class="scroll-body" id="characterList" style="padding-bottom:24px;"></div>
@@ -92,6 +98,18 @@ export class HomeScreen {
     })
     this._el.querySelectorAll('.home-nav-item').forEach(item => {
       item.addEventListener('click', () => this._switchTab(item.dataset.tab))
+    })
+    this._el.querySelector('#groupsBtn')?.addEventListener('click', () => this._snack('Groups is not wired yet in v2.'))
+    this._el.querySelector('#sortActorsBtn')?.addEventListener('click', () => {
+      this._characterSort = this._characterSort === 'name' ? 'project' : 'name'
+      const btn = this._el.querySelector('#sortActorsBtn')
+      if (btn) btn.textContent = this._characterSort === 'name' ? 'Sort: Name' : 'Sort: Story'
+      this._refreshCharacterList()
+    })
+    this._el.querySelector('#addActorBtn')?.addEventListener('click', () => {
+      const project = store.getProjects()[0]
+      if (!project) return this._snack('Create a story first.')
+      push('actor-editor', { projectId: project.id, actorId: null })
     })
     store.on('projects-changed', this._onChange)
     this._refreshList()
@@ -216,6 +234,14 @@ export class HomeScreen {
         </div>`
       return
     }
+
+    rows.sort((a, b) => {
+      if (this._characterSort === 'project') {
+        const pa = a.project.name.localeCompare(b.project.name)
+        if (pa !== 0) return pa
+      }
+      return a.actor.name.localeCompare(b.actor.name)
+    })
 
     list.innerHTML = rows.map(({ project, actor }) => {
       const sideLabel = actor.side === 'right' ? 'Right side' : 'Left side'

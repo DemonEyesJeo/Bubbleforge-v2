@@ -249,6 +249,32 @@ body {
   color: var(--t3);
   font-size: 13px;
 }
+.home-pane-actions {
+  padding: 10px 20px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.home-pane-action {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--s1);
+  color: var(--t1);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.home-pane-action.ghost { color: var(--t3); }
+.home-pane-action.add {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+}
 .home-actor-row {
   margin: 0 20px 10px;
   padding: 12px 14px;
