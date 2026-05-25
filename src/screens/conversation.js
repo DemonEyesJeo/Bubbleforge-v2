@@ -171,7 +171,7 @@ export class ConversationScreen {
 
     input.addEventListener('input', () => {
       this._syncComposeCharCount(input)
-      sendBtn.classList.toggle('ready', input.value.trim().length > 0)
+      this._syncSendReady()
       input.style.height = 'auto'
       input.style.height = Math.min(input.scrollHeight, 100) + 'px'
     })
@@ -183,6 +183,7 @@ export class ConversationScreen {
     sendBtn.addEventListener('click', () => this._send())
 
     this._refresh()
+    this._syncSendReady()
   }
 
   resume() { this._refresh() }
@@ -426,16 +427,22 @@ export class ConversationScreen {
   _send() {
     const input = this._el.querySelector('#composeInput')
     const text = input.value.trim()
-    if (!text || !this._activeActorId) return
+    const hasAttachment = Boolean(this._composePendingMedia || this._composePendingAudio)
+    if (!this._activeActorId) return
 
     const scene = store.getActiveScene(this.projectId)
     if (!scene) return
 
     if (this._editingMsgId) {
+      if (!text) {
+        input.focus()
+        return
+      }
       store.updateMessage(this.projectId, this._editingSceneId, this._editingMsgId, { text })
       this._editingMsgId = null
       this._editingSceneId = null
     } else {
+      if (!text && !hasAttachment) return
       const extras = {}
       if (this._composePendingMedia) extras.media = this._composePendingMedia
       if (this._composePendingAudio) extras.audio = this._composePendingAudio
@@ -448,6 +455,16 @@ export class ConversationScreen {
     input.style.height = 'auto'
     input.dispatchEvent(new Event('input'))
     this._syncComposeMediaPreview()
+    this._syncSendReady()
+  }
+
+  _syncSendReady() {
+    const input = this._el?.querySelector('#composeInput')
+    const sendBtn = this._el?.querySelector('#sendBtn')
+    if (!input || !sendBtn) return
+    const hasText = input.value.trim().length > 0
+    const hasAttachment = Boolean(this._composePendingMedia || this._composePendingAudio)
+    sendBtn.classList.toggle('ready', hasText || hasAttachment)
   }
 
   _openHub() {
@@ -503,6 +520,7 @@ export class ConversationScreen {
         reader.onload = () => {
           this._composePendingAudio = String(reader.result || '')
           this._syncComposeMediaPreview()
+          this._syncSendReady()
           this._snack('Voice note ready. Tap send to post.')
         }
         reader.readAsDataURL(blob)
@@ -559,6 +577,7 @@ export class ConversationScreen {
       this._composePendingMedia = String(reader.result || '')
       this._syncComposeMediaPreview()
       this._setAudioPillOpen(true)
+      this._syncSendReady()
     }
     reader.readAsDataURL(file)
     input.value = ''
@@ -572,6 +591,7 @@ export class ConversationScreen {
       this._composePendingAudio = String(reader.result || '')
       this._syncComposeMediaPreview()
       this._setAudioPillOpen(true)
+      this._syncSendReady()
     }
     reader.readAsDataURL(file)
     input.value = ''
