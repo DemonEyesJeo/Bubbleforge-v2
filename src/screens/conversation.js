@@ -61,7 +61,9 @@ export class ConversationScreen {
           <textarea class="compose-input" id="composeInput" rows="1" placeholder="Message…"></textarea>
           <div class="compose-count" id="composeCount">0 / 160</div>
           <div class="nav-btn" id="emojiBtn" title="Emoji">${icons.emoji}</div>
+          <input id="composeCameraInput" type="file" accept="image/*" capture="environment" hidden />
           <input id="composeMediaInput" type="file" accept="image/*" hidden />
+          <div class="nav-btn" id="cameraBtn" title="Camera">${icons.camera}</div>
           <div class="nav-btn" id="mediaBtn" title="Attach image">${icons.image}</div>
           <div class="nav-btn" id="exportBtn" title="Export">${icons.export}</div>
           <div class="send-btn" id="sendBtn">${icons.send}</div>
@@ -83,7 +85,9 @@ export class ConversationScreen {
     this._el.querySelector('#menuBtn').addEventListener('click', () => this._openHub())
     this._el.querySelector('#exportBtn').addEventListener('click', () => this._openExport())
     this._el.querySelector('#audioToggleBtn').addEventListener('click', () => this._toggleAudioPill())
+    this._el.querySelector('#cameraBtn').addEventListener('click', () => this._el.querySelector('#composeCameraInput')?.click())
     this._el.querySelector('#mediaBtn').addEventListener('click', () => this._el.querySelector('#composeMediaInput')?.click())
+    this._el.querySelector('#composeCameraInput').addEventListener('change', e => this._pickComposeMedia(e.target))
     this._el.querySelector('#composeMediaInput').addEventListener('change', e => this._pickComposeMedia(e.target))
     this._el.querySelector('#emojiBtn').addEventListener('click', e => this._toggleEmojiPicker(e.currentTarget))
 
