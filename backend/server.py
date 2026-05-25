@@ -228,6 +228,15 @@ def serve_upload(filename):
         return jsonify({'error': 'Invalid filename'}), 400
     return send_from_directory(UPLOADS_DIR, safe_name)
 
+
+@app.route('/api/exports/<path:filename>', methods=['GET'])
+def serve_export(filename):
+    safe_name = secure_filename(filename)
+    if safe_name != filename:
+        return jsonify({'error': 'Invalid filename'}), 400
+    exports_dir = Path(__file__).resolve().parent / 'exports'
+    return send_from_directory(exports_dir, safe_name, as_attachment=True)
+
 @app.route('/api/export', methods=['POST'])
 def export():
     data = request.json or {}
@@ -302,6 +311,7 @@ def _run_export(job_id, project):
         jobs[job_id]['status'] = 'done'
         jobs[job_id]['progress'] = 100
         jobs[job_id]['output_path'] = str(out_path)
+        jobs[job_id]['output_url'] = f"/api/exports/{out_path.name}"
     except Exception as e:
         jobs[job_id]['status'] = 'error'
         jobs[job_id]['error'] = str(e)

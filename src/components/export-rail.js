@@ -327,6 +327,7 @@ export class ExportRail {
           status: job.status || 'running',
           progress: typeof job.progress === 'number' ? job.progress : 0,
           outputPath: job.output_path,
+          outputUrl: job.output_url,
           error: job.error,
         }
         this._exportState = state
@@ -410,6 +411,7 @@ export class ExportRail {
         </div>
         <div class="export-progress-percent">${progress}%</div>
         ${done && st.outputPath ? `<div class="export-output-path">${st.outputPath}</div>` : ''}
+        ${done && st.outputUrl ? `<a class="export-output-path" href="${st.outputUrl}" target="_blank" rel="noopener noreferrer">Download exported file</a>` : ''}
         ${done ? '<button class="export-share-btn" id="exportShareBtn">Share</button>' : ''}
       </div>
     `
@@ -418,13 +420,15 @@ export class ExportRail {
     if (shareBtn) {
       shareBtn.addEventListener('click', async () => {
         const path = st.outputPath || ''
+        const url = st.outputUrl ? new URL(st.outputUrl, window.location.origin).toString() : ''
+        const text = url || path
         try {
           if (navigator.share) {
-            await navigator.share({ title: 'Bubbleforge export', text: path })
+            await navigator.share({ title: 'Bubbleforge export', text, url: url || undefined })
             return
           }
-          await navigator.clipboard.writeText(path)
-          this._snack('Export path copied to clipboard')
+          await navigator.clipboard.writeText(text)
+          this._snack(url ? 'Export link copied to clipboard' : 'Export path copied to clipboard')
         } catch {
           this._snack('Could not share export path')
         }
