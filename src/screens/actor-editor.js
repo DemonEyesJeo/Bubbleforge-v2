@@ -11,6 +11,7 @@ export class ActorEditorScreen {
     this._color    = ACTOR_COLORS[0]
     this._side     = 'left'
     this._name     = ''
+    this._avatar   = null
   }
 
   render() {
@@ -21,6 +22,7 @@ export class ActorEditorScreen {
       this._color = actor.color
       this._side  = actor.side
       this._name  = actor.name
+      this._avatar = actor.avatar || null
     } else {
       // Pick a color not yet used
       const usedColors = new Set((p?.actors || []).map(a => a.color))
@@ -40,13 +42,18 @@ export class ActorEditorScreen {
         <div class="actor-preview-zone">
           <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
             <div class="actor-preview-avatar" id="previewAvatar"
-                 style="background:${this._color};box-shadow:0 0 0 3px rgba(${hexToRgb(this._color)},0.3),0 8px 24px rgba(${hexToRgb(this._color)},0.25);">
+                style="background:${this._color};box-shadow:0 0 0 3px rgba(${hexToRgb(this._color)},0.3),0 8px 24px rgba(${hexToRgb(this._color)},0.25);">
               ${this._name ? this._name[0].toUpperCase() : '?'}
             </div>
             <div class="actor-preview-name" id="previewName">${this._name || 'New Actor'}</div>
             <div class="actor-preview-sample" id="previewSample"
                  style="background:var(--accent-g);">
               Preview message
+            </div>
+            <div class="avatar-action-row">
+              <div class="avatar-action-btn" id="pickAvatarBtn">${icons.image} Choose avatar</div>
+              <div class="avatar-action-btn ghost" id="clearAvatarBtn">Clear</div>
+              <input id="avatarInput" type="file" accept="image/*" hidden />
             </div>
           </div>
         </div>
@@ -111,6 +118,23 @@ export class ActorEditorScreen {
     })
 
     this._el.querySelector('#saveBtn').addEventListener('click', () => this._save())
+    this._el.querySelector('#pickAvatarBtn').addEventListener('click', () => {
+      this._el.querySelector('#avatarInput')?.click()
+    })
+    this._el.querySelector('#clearAvatarBtn').addEventListener('click', () => {
+      this._avatar = null
+      this._updatePreview()
+    })
+    this._el.querySelector('#avatarInput').addEventListener('change', e => {
+      const file = e.target.files?.[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = () => {
+        this._avatar = String(reader.result || '')
+        this._updatePreview()
+      }
+      reader.readAsDataURL(file)
+    })
 
     this._el.querySelector('#deleteBtn')?.addEventListener('click', () => {
       store.deleteActor(this.projectId, this.actorId)
@@ -125,8 +149,17 @@ export class ActorEditorScreen {
     const sample = this._el.querySelector('#previewSample')
 
     avatar.style.background  = this._color
+    if (this._avatar) {
+      avatar.style.backgroundImage = `url('${this._avatar.replace(/'/g, '%27')}')`
+      avatar.style.backgroundSize = 'cover'
+      avatar.style.backgroundPosition = 'center'
+    } else {
+      avatar.style.backgroundImage = 'none'
+      avatar.style.background = this._color
+    }
     avatar.style.boxShadow   = `0 0 0 3px rgba(${rgb},0.3),0 8px 24px rgba(${rgb},0.25)`
     avatar.textContent        = this._name ? this._name[0].toUpperCase() : '?'
+    if (this._avatar) avatar.textContent = ''
     name.textContent          = this._name || 'New Actor'
 
     if (this._side === 'right') {
@@ -148,9 +181,9 @@ export class ActorEditorScreen {
       return
     }
     if (this.isNew) {
-      store.addActor(this.projectId, name, this._color, this._side)
+      store.addActor(this.projectId, name, this._color, this._side, this._avatar)
     } else {
-      store.updateActor(this.projectId, this.actorId, { name, color: this._color, side: this._side })
+      store.updateActor(this.projectId, this.actorId, { name, color: this._color, side: this._side, avatar: this._avatar })
     }
     pop()
   }

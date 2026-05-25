@@ -109,9 +109,12 @@ export class ConversationScreen {
     strip.innerHTML = p.actors.map(a => {
       const active = a.id === this._activeActorId
       const rgb = this._rgb(a.color)
+      const avatarStyle = a.avatar
+        ? `background-image:url('${a.avatar.replace(/'/g, '%27')}');background-size:cover;background-position:center;${active ? `box-shadow:0 0 0 1.5px rgba(${rgb},0.4);` : ''}`
+        : `background:${a.color};${active ? `box-shadow:0 0 0 1.5px rgba(${rgb},0.4);` : ''}`
       return `
         <div class="speaker-chip ${active ? 'active' : ''}" data-actor-id="${a.id}">
-          <div class="chip-avatar" style="background:${a.color};${active ? `box-shadow:0 0 0 1.5px rgba(${rgb},0.4);` : ''}">${a.name[0]}</div>
+          <div class="chip-avatar" style="${avatarStyle}">${a.avatar ? '' : a.name[0]}</div>
           <span class="chip-name">${a.name}</span>
         </div>`
     }).join('')

@@ -1010,6 +1010,28 @@ body {
 }
 .btn-danger:active { background: rgba(245,0,87,0.2); }
 
+.avatar-action-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.avatar-action-btn {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--s2);
+  color: var(--t1);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.avatar-action-btn.ghost { color: var(--t3); }
+
 .svg-icon { display: flex; align-items: center; justify-content: center; }
 
 /* Fade-in for new elements */

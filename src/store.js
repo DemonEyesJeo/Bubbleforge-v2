@@ -247,11 +247,11 @@ class Store {
   }
 
   // ── Actors ───────────────────────────────────
-  addActor(projectId, name, color, side = 'left') {
+  addActor(projectId, name, color, side = 'left', avatar = null) {
     const p = this.getProject(projectId)
     if (!p) return null
     this._snapshot()
-    const actor = { id: uuid(), name, color, side, avatar: null }
+    const actor = { id: uuid(), name, color, side, avatar }
     p.actors.push(actor)
     p.updated_at = now()
     this._save()
