@@ -199,6 +199,8 @@ export class PlayScreen {
       this._elapsedMs = 0
       this._playheadMs = 0
       this._renderCanvas(p, scene, [])
+      this._el.querySelector('#progressFill').style.width = '0%'
+      this._el.querySelector('#timeCurrent').textContent = this._formatTime(0)
     }
     this._playing = true
     this._el.querySelector('#playBtn').innerHTML = icons.pause
