@@ -89,14 +89,18 @@ export class PlayScreen {
     // Calculate total duration for progress bar
     const typingDur = (rs.typing_duration || 0.08) * 1000
     const indicatorDur = (rs.typing_indicator_duration || 1.2) * 1000
+    const indicatorGapDur = (rs.typing_indicator_gap || 0.4) * 1000
     const pauseDur = (rs.message_pause || 0.8) * 1000
     const typingEnabled = rs.typing_animation !== false
+    const fakeoutEnabled = rs.fakeout !== false
     let totalMs = 0
     this._timelineMs = []
-    for (const msg of this._msgQueue) {
+    for (let i = 0; i < this._msgQueue.length; i++) {
+      const msg = this._msgQueue[i]
       const msgText = String(msg?.text || '')
+      const fakeoutCost = fakeoutEnabled && i > 0 ? (indicatorGapDur + indicatorDur * 0.6) : 0
       const typingCost = typingEnabled ? msgText.length * typingDur : 0
-      totalMs += indicatorDur + typingCost + pauseDur
+      totalMs += indicatorDur + fakeoutCost + typingCost + pauseDur
       this._timelineMs.push(totalMs)
     }
     this._totalMs = totalMs || 10000
