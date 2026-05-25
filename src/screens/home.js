@@ -149,6 +149,7 @@ export class HomeScreen {
   }
 
   destroy() {
+    this._closeProjectMenu()
     this._closeCreateProjectSheet()
     this._closeCreditsSheet()
     this._closeProSheet()
@@ -429,31 +430,10 @@ export class HomeScreen {
       })
     })
 
-    list.querySelectorAll('.project-rename-btn').forEach(btn => {
+    list.querySelectorAll('.scene-menu-btn[data-project-id]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation()
-        const projectId = btn.dataset.projectId
-        const project = store.getProject(projectId)
-        if (!project) return
-        const nextName = window.prompt('Rename story', project.name)
-        if (nextName == null) return
-        const trimmed = nextName.trim()
-        if (!trimmed) return this._snack('Story name cannot be empty.')
-        store.updateProject(projectId, { name: trimmed })
-        this._snack('Story renamed')
-      })
-    })
-
-    list.querySelectorAll('.project-delete-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation()
-        const projectId = btn.dataset.projectId
-        const project = store.getProject(projectId)
-        if (!project) return
-        const ok = window.confirm(`Delete "${project.name}"? This cannot be undone.`)
-        if (!ok) return
-        store.deleteProject(projectId)
-        this._snack('Story deleted')
+        this._showProjectMenu(btn.dataset.projectId)
       })
     })
   }
@@ -579,12 +559,8 @@ export class HomeScreen {
       <div class="project-card" data-project-id="${p.id}">
         <div class="project-cover" style="background:${this._coverGradient(colors)};">
           <div class="project-cover-overlay"></div>
-          <div style="position:absolute;top:8px;right:8px;display:flex;gap:6px;z-index:2;">
-            <button class="project-rename-btn" data-project-id="${p.id}" type="button" style="border:0;background:rgba(0,0,0,0.38);color:#fff;border-radius:10px;padding:5px 8px;font-size:11px;cursor:pointer;">Rename</button>
-            <button class="project-delete-btn" data-project-id="${p.id}" type="button" style="border:0;background:rgba(245,0,87,0.65);color:#fff;border-radius:10px;padding:5px 8px;font-size:11px;cursor:pointer;">Delete</button>
-          </div>
+          <button class="scene-menu-btn" data-project-id="${p.id}" type="button" aria-label="Project options">···</button>
           <div class="project-cover-stack" aria-hidden="true">${stack}</div>
-          <div class="project-stack-count">${p.scenes.length}</div>
         </div>
         <div class="project-info">
           <div>
@@ -594,6 +570,75 @@ export class HomeScreen {
           <div class="actor-pips">${pips}</div>
         </div>
       </div>`
+  }
+
+  _showProjectMenu(projectId) {
+    if (this._projectMenuOverlay || this._projectMenuSheet) return
+
+    const project = store.getProject(projectId)
+    if (!project) return
+
+    const overlay = document.createElement('div')
+    overlay.className = 'new-project-overlay'
+
+    const sheet = document.createElement('div')
+    sheet.className = 'new-project-sheet'
+    sheet.innerHTML = `
+      <div class="new-project-handle"></div>
+      <div class="new-project-title">Project actions</div>
+      <div class="new-project-sub">${project.name}</div>
+      <div class="new-project-actions" style="flex-direction:column; margin-top:14px;">
+        <button id="projectRenameBtn" class="new-project-btn ghost">Rename</button>
+        <button id="projectDeleteBtn" class="new-project-btn ghost" style="color:var(--danger);">Delete</button>
+        <button id="projectCloseBtn" class="new-project-btn primary">Done</button>
+      </div>
+    `
+
+    this._projectMenuOverlay = overlay
+    this._projectMenuSheet = sheet
+    this._el.appendChild(overlay)
+    this._el.appendChild(sheet)
+
+    const close = () => this._closeProjectMenu()
+    overlay.addEventListener('click', close)
+    sheet.querySelector('#projectCloseBtn')?.addEventListener('click', close)
+
+    sheet.querySelector('#projectRenameBtn')?.addEventListener('click', () => {
+      const nextName = window.prompt('Rename story', project.name)
+      if (nextName == null) return
+      const trimmed = nextName.trim()
+      if (!trimmed) return this._snack('Story name cannot be empty.')
+      store.updateProject(projectId, { name: trimmed })
+      this._snack('Story renamed')
+      close()
+    })
+
+    sheet.querySelector('#projectDeleteBtn')?.addEventListener('click', () => {
+      const ok = window.confirm(`Delete "${project.name}"? This cannot be undone.`)
+      if (!ok) return
+      store.deleteProject(projectId)
+      this._snack('Story deleted')
+      close()
+    })
+
+    requestAnimationFrame(() => {
+      overlay.classList.add('visible')
+      sheet.classList.add('visible')
+    })
+  }
+
+  _closeProjectMenu() {
+    if (!this._projectMenuOverlay || !this._projectMenuSheet) return
+    const overlay = this._projectMenuOverlay
+    const sheet = this._projectMenuSheet
+    overlay.classList.remove('visible')
+    sheet.classList.remove('visible')
+    this._projectMenuOverlay = null
+    this._projectMenuSheet = null
+    setTimeout(() => {
+      overlay.remove()
+      sheet.remove()
+    }, 220)
   }
 
   _coverGradient(colors) {
