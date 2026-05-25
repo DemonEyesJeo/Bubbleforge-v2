@@ -28,8 +28,7 @@ export class HomeScreen {
 
   bind() {
     this._el.querySelector('#newProjectBtn').addEventListener('click', () => {
-      const p = store.createProject('New Story')
-      push('conversation', { projectId: p.id })
+      this._openCreateProjectSheet()
     })
     store.on('projects-changed', this._onChange)
     this._refreshList()
@@ -40,7 +39,70 @@ export class HomeScreen {
   }
 
   destroy() {
+    this._closeCreateProjectSheet()
     store.off('projects-changed', this._onChange)
+  }
+
+  _openCreateProjectSheet() {
+    if (this._createOverlay) return
+
+    const overlay = document.createElement('div')
+    overlay.className = 'new-project-overlay'
+
+    const sheet = document.createElement('div')
+    sheet.className = 'new-project-sheet'
+    sheet.innerHTML = `
+      <div class="new-project-handle"></div>
+      <div class="new-project-title">New Story</div>
+      <div class="new-project-sub">Give your story a name before opening it.</div>
+      <input id="newProjectName" class="new-project-input" type="text" maxlength="80" placeholder="My Story" />
+      <div class="new-project-actions">
+        <button id="cancelNewProject" class="new-project-btn ghost">Cancel</button>
+        <button id="createNewProject" class="new-project-btn primary">Create</button>
+      </div>
+    `
+
+    this._createOverlay = overlay
+    this._createSheet = sheet
+    this._el.appendChild(overlay)
+    this._el.appendChild(sheet)
+
+    const close = () => this._closeCreateProjectSheet()
+    const create = () => {
+      const input = sheet.querySelector('#newProjectName')
+      const name = (input?.value || '').trim() || 'New Story'
+      const project = store.createProject(name)
+      this._closeCreateProjectSheet()
+      push('conversation', { projectId: project.id })
+    }
+
+    overlay.addEventListener('click', close)
+    sheet.querySelector('#cancelNewProject').addEventListener('click', close)
+    sheet.querySelector('#createNewProject').addEventListener('click', create)
+    sheet.querySelector('#newProjectName').addEventListener('keydown', e => {
+      if (e.key === 'Enter') create()
+      if (e.key === 'Escape') close()
+    })
+
+    requestAnimationFrame(() => {
+      overlay.classList.add('visible')
+      sheet.classList.add('visible')
+      sheet.querySelector('#newProjectName')?.focus()
+    })
+  }
+
+  _closeCreateProjectSheet() {
+    if (!this._createOverlay || !this._createSheet) return
+    const overlay = this._createOverlay
+    const sheet = this._createSheet
+    overlay.classList.remove('visible')
+    sheet.classList.remove('visible')
+    this._createOverlay = null
+    this._createSheet = null
+    setTimeout(() => {
+      overlay.remove()
+      sheet.remove()
+    }, 220)
   }
 
   _refreshList() {
