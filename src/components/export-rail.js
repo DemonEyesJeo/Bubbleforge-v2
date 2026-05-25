@@ -71,7 +71,7 @@ export class ExportRail {
     const rs = p?.render_settings || {}
     // Update CTA label
     const cta = this._rail.querySelector('#exportCta')
-    if (cta) cta.textContent = tab === 'format' && rs.format === 'pdf' ? 'Export PDF' : 'Export MP4'
+    if (cta) cta.textContent = this._exportCtaLabel(rs.format)
     this._renderTab(tab)
   }
 
@@ -149,7 +149,7 @@ export class ExportRail {
         if (key && mapper) store.updateRenderSettings(this.projectId, { [key]: mapper(pill.dataset.value) })
         if (key === 'format') {
           const cta = this._rail.querySelector('#exportCta')
-          if (cta) cta.textContent = pill.dataset.value === 'PDF' ? 'Export PDF' : 'Export MP4'
+          if (cta) cta.textContent = this._exportCtaLabel(pill.dataset.value)
         }
       })
     })
@@ -296,6 +296,13 @@ export class ExportRail {
     if (key === 'music_volume')              return `${Math.round(val * 100)}%`
     if (key === 'message_pause')             return `${val.toFixed(1)}s`
     return val.toFixed(2)
+  }
+
+  _exportCtaLabel(formatValue) {
+    const fmt = String(formatValue || 'mp4').toLowerCase()
+    if (fmt === 'pdf') return 'Export PDF'
+    if (fmt === 'png_sequence' || fmt === 'png sequence') return 'Export PNG Sequence'
+    return 'Export MP4'
   }
 
   _doExport() {
