@@ -62,7 +62,7 @@ export class ExportRail {
   }
 
   _setTab(tab, el) {
-    if (this._exportState && (this._exportState.status === 'queued' || this._exportState.status === 'running')) {
+    if (this._exportState && (this._exportState.status === 'queued' || this._exportState.status === 'running' || this._exportState.status === 'cancelling')) {
       return
     }
     this.activeTab = tab
@@ -356,6 +356,7 @@ export class ExportRail {
         const state = {
           status: job.status || 'running',
           progress: typeof job.progress === 'number' ? job.progress : 0,
+          jobId,
           outputPath: job.output_path,
           outputUrl: job.output_url,
           error: job.error,
@@ -363,7 +364,7 @@ export class ExportRail {
         this._exportState = state
         this._renderExportState()
 
-        if (state.status === 'done' || state.status === 'error') {
+        if (state.status === 'done' || state.status === 'error' || state.status === 'canceled') {
           this._stopPolling()
         }
       } catch (err) {
@@ -395,9 +396,10 @@ export class ExportRail {
     if (!body || !cta || !st) return
 
     const progress = Math.max(0, Math.min(100, Number(st.progress || 0)))
-    const running = st.status === 'queued' || st.status === 'running'
+    const running = st.status === 'queued' || st.status === 'running' || st.status === 'cancelling'
     const previewing = st.status === 'preview'
     const done = st.status === 'done'
+    const canceled = st.status === 'canceled'
     const errored = st.status === 'error'
 
     cta.style.display = running || previewing ? 'none' : 'block'
@@ -435,19 +437,37 @@ export class ExportRail {
 
     body.innerHTML = `
       <div class="export-progress-wrap">
-      <div class="export-progress-title">${done ? 'Export complete' : errored ? 'Export failed' : `Exporting ${fmtLabel}`}</div>
+        <div class="export-progress-title">${done ? 'Export complete' : canceled ? 'Export canceled' : errored ? 'Export failed' : `Exporting ${fmtLabel}`}</div>
         <div class="export-progress-sub ${errored ? 'is-error' : ''}">
-          ${errored ? (st.message || st.error || 'An unknown export error occurred.') : done ? `${fmtLabel} export is ready.` : (st.message || 'Rendering and mixing audio...')}
+          ${errored ? (st.message || st.error || 'An unknown export error occurred.') : canceled ? 'The export was canceled.' : done ? `${fmtLabel} export is ready.` : (st.status === 'cancelling' ? 'Stopping export…' : (st.message || 'Rendering and mixing audio...'))}
         </div>
         <div class="export-progress-track">
           <div class="export-progress-fill" style="width:${progress}%"></div>
         </div>
         <div class="export-progress-percent">${progress}%</div>
+        ${running && st.jobId ? '<button class="export-share-btn" id="exportCancelBtn">Cancel Export</button>' : ''}
         ${done && st.outputPath ? `<div class="export-output-path">${st.outputPath}</div>` : ''}
         ${done && st.outputUrl ? `<a class="export-output-path" href="${st.outputUrl}" target="_blank" rel="noopener noreferrer">Download exported file</a>` : ''}
         ${done ? '<button class="export-share-btn" id="exportShareBtn">Share</button>' : ''}
       </div>
     `
+
+    const cancelBtn = body.querySelector('#exportCancelBtn')
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', async () => {
+        const jobId = st.jobId
+        if (!jobId) return
+        this._exportState = { ...st, status: 'cancelling', message: 'Stopping export…' }
+        this._renderExportState()
+        try {
+          const resp = await fetch(`/api/export/${jobId}/cancel`, { method: 'POST' })
+          const data = await resp.json()
+          if (!resp.ok) throw new Error(data?.error || 'Failed to cancel export')
+        } catch (err) {
+          this._snack(err?.message || 'Failed to cancel export')
+        }
+      })
+    }
 
     const shareBtn = body.querySelector('#exportShareBtn')
     if (shareBtn) {

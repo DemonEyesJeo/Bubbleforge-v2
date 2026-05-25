@@ -20,6 +20,7 @@ app = Flask(__name__)
 CORS(app)
 
 jobs = {}  # job_id -> status dict
+cancel_events = {}  # job_id -> threading.Event
 UPLOADS_DIR = Path(__file__).resolve().parent / 'uploads'
 
 
@@ -246,6 +247,7 @@ def export():
 
     job_id = str(uuid.uuid4())
     jobs[job_id] = {'status': 'queued', 'progress': 0}
+    cancel_events[job_id] = threading.Event()
 
     thread = threading.Thread(target=_run_export, args=(job_id, project), daemon=True)
     thread.start()
@@ -259,10 +261,33 @@ def export_status(job_id):
         return jsonify({'error': 'Job not found'}), 404
     return jsonify(job)
 
+
+@app.route('/api/export/<job_id>/cancel', methods=['POST'])
+def export_cancel(job_id):
+    job = jobs.get(job_id)
+    if not job:
+        return jsonify({'error': 'Job not found'}), 404
+
+    status = str(job.get('status') or '').lower()
+    if status in ('done', 'error', 'canceled'):
+        return jsonify({'job_id': job_id, 'status': status})
+
+    ev = cancel_events.get(job_id)
+    if ev is not None:
+        ev.set()
+    if status in ('queued', 'running'):
+        jobs[job_id]['status'] = 'cancelling'
+    return jsonify({'job_id': job_id, 'status': jobs[job_id]['status']})
+
 def _run_export(job_id, project):
+    cancel_event = cancel_events.get(job_id)
     try:
         jobs[job_id]['status'] = 'running'
         jobs[job_id]['progress'] = 0
+
+        if cancel_event is not None and cancel_event.is_set():
+            jobs[job_id]['status'] = 'canceled'
+            return
 
         proj, out_size, fmt = _project_from_frontend(project)
         if not proj.messages:
@@ -296,12 +321,22 @@ def _run_export(job_id, project):
                 music_volume=float(proj.settings.music_volume or 0.7),
                 loop_music=bool(getattr(proj.settings, 'loop_music', True)),
                 fade_music=bool(getattr(proj.settings, 'fade_music', True)),
+                cancel_event=cancel_event,
             )
+            if cancel_event is not None and cancel_event.is_set():
+                jobs[job_id]['status'] = 'canceled'
+                return
         elif fmt == 'pdf':
+            if cancel_event is not None and cancel_event.is_set():
+                jobs[job_id]['status'] = 'canceled'
+                return
             out_path = out_dir / f'bubbleforge_{job_id}.pdf'
             jobs[job_id]['progress'] = 35
             _export_pdf(proj, out_path, out_size)
         elif fmt == 'png_sequence':
+            if cancel_event is not None and cancel_event.is_set():
+                jobs[job_id]['status'] = 'canceled'
+                return
             out_path = out_dir / f'bubbleforge_{job_id}_png'
             jobs[job_id]['progress'] = 35
             _export_png_sequence(proj, out_path, out_size)
@@ -315,6 +350,8 @@ def _run_export(job_id, project):
     except Exception as e:
         jobs[job_id]['status'] = 'error'
         jobs[job_id]['error'] = str(e)
+    finally:
+        cancel_events.pop(job_id, None)
 
 if __name__ == '__main__':
     print('Bubbleforge v2 backend — http://localhost:5000')
