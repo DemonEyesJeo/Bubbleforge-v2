@@ -60,6 +60,7 @@ export function renderMessages(messages, actors, onBubbleTap) {
                  data-actor-id="${actor.id}"
                  title="${escHtml(msg.text)}">
               ${msg.media ? `<img class="bubble-media" src="${escAttr(msg.media)}" alt="attachment" />` : ''}
+              ${msg.audio ? `<audio class="bubble-audio" controls src="${escAttr(msg.audio)}"></audio>` : ''}
               <div class="bubble-text">${escHtml(msg.text)}</div>
               ${msg.reaction ? `<div class="bubble-reaction" aria-label="Reaction">${escHtml(msg.reaction)}</div>` : ''}
             </div>

@@ -13,9 +13,13 @@ export class ConversationScreen {
     this._exportRail = null
     this._audioToolsOpen = false
     this._composePendingMedia = ''
+    this._composePendingAudio = ''
     this._composeCharLimit = 160
     this._bubbleLongPressTimer = null
     this._bubbleLongPressSuppressedMsgId = null
+    this._audioRecorder = null
+    this._audioChunks = []
+    this._audioStream = null
     this._onChange = () => this._refresh()
   }
 
@@ -53,6 +57,10 @@ export class ConversationScreen {
             <div class="audio-pill-title">Audio tools</div>
             <div class="audio-pill-sub" id="audioPillSub">Hidden while typing</div>
             <div class="audio-pill-preview" id="audioPillPreview"></div>
+              <div class="audio-pill-actions">
+                <button class="audio-pill-action" id="audioAttachBtn" type="button">Attach</button>
+                <button class="audio-pill-action primary" id="audioRecordBtn" type="button">Record</button>
+              </div>
             <div class="audio-pill-track"><div class="audio-pill-fill" style="width:38%"></div></div>
           </div>
         </div>
@@ -61,6 +69,7 @@ export class ConversationScreen {
           <textarea class="compose-input" id="composeInput" rows="1" placeholder="Message…"></textarea>
           <div class="compose-count" id="composeCount">0 / 160</div>
           <div class="nav-btn" id="emojiBtn" title="Emoji">${icons.emoji}</div>
+          <input id="composeAudioInput" type="file" accept="audio/*" hidden />
           <input id="composeCameraInput" type="file" accept="image/*" capture="environment" hidden />
           <input id="composeMediaInput" type="file" accept="image/*" hidden />
           <div class="nav-btn" id="cameraBtn" title="Camera">${icons.camera}</div>
@@ -85,8 +94,11 @@ export class ConversationScreen {
     this._el.querySelector('#menuBtn').addEventListener('click', () => this._openHub())
     this._el.querySelector('#exportBtn').addEventListener('click', () => this._openExport())
     this._el.querySelector('#audioToggleBtn').addEventListener('click', () => this._toggleAudioPill())
+    this._el.querySelector('#audioAttachBtn').addEventListener('click', () => this._el.querySelector('#composeAudioInput')?.click())
+    this._el.querySelector('#audioRecordBtn').addEventListener('click', () => this._toggleAudioRecording())
     this._el.querySelector('#cameraBtn').addEventListener('click', () => this._el.querySelector('#composeCameraInput')?.click())
     this._el.querySelector('#mediaBtn').addEventListener('click', () => this._el.querySelector('#composeMediaInput')?.click())
+    this._el.querySelector('#composeAudioInput').addEventListener('change', e => this._pickComposeAudio(e.target))
     this._el.querySelector('#composeCameraInput').addEventListener('change', e => this._pickComposeMedia(e.target))
     this._el.querySelector('#composeMediaInput').addEventListener('change', e => this._pickComposeMedia(e.target))
     this._el.querySelector('#emojiBtn').addEventListener('click', e => this._toggleEmojiPicker(e.currentTarget))
@@ -95,11 +107,15 @@ export class ConversationScreen {
       btn.addEventListener('click', () => {
         const action = btn.dataset.action
         if (action === 'play') {
-          this._snack('Audio preview is coming from the v1 pill in the next slice.')
+          this._playPendingAudio()
         } else if (action === 'rewind') {
-          this._snack('Rewind audio tools is not wired yet.')
+          this._restartPendingAudio()
         } else if (action === 'attach' || action === 'mic') {
-          this._snack(`${action === 'attach' ? 'Attach' : 'Mic'} is not wired yet.`)
+          if (action === 'attach') {
+            this._el.querySelector('#composeAudioInput')?.click()
+          } else {
+            this._toggleAudioRecording()
+          }
         }
       })
     })
@@ -363,11 +379,15 @@ export class ConversationScreen {
       this._editingMsgId = null
       this._editingSceneId = null
     } else {
-      store.addMessage(this.projectId, scene.id, this._activeActorId, text, this._composePendingMedia ? { media: this._composePendingMedia } : {})
+      const extras = {}
+      if (this._composePendingMedia) extras.media = this._composePendingMedia
+      if (this._composePendingAudio) extras.audio = this._composePendingAudio
+      store.addMessage(this.projectId, scene.id, this._activeActorId, text, extras)
     }
 
     input.value = ''
     this._composePendingMedia = ''
+    this._composePendingAudio = ''
     input.style.height = 'auto'
     input.dispatchEvent(new Event('input'))
     this._syncComposeMediaPreview()
@@ -392,6 +412,56 @@ export class ConversationScreen {
     if (pill) pill.classList.toggle('open', this._audioToolsOpen)
     if (sub) sub.textContent = this._audioToolsOpen ? 'Ready for voice and media tools' : 'Hidden while typing'
     this._syncComposeMediaPreview()
+  }
+
+  async _toggleAudioRecording() {
+    if (this._audioRecorder && this._audioRecorder.state === 'recording') {
+      this._audioRecorder.stop()
+      return
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      this._snack('Recording is not available in this browser.')
+      return
+    }
+
+    try {
+      this._audioStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      this._audioChunks = []
+      this._audioRecorder = new MediaRecorder(this._audioStream)
+      this._audioRecorder.ondataavailable = event => {
+        if (event.data && event.data.size > 0) this._audioChunks.push(event.data)
+      }
+      this._audioRecorder.onstop = () => {
+        const blob = new Blob(this._audioChunks, { type: this._audioRecorder?.mimeType || 'audio/webm' })
+        this._audioChunks = []
+        this._stopAudioStream()
+        const reader = new FileReader()
+        reader.onload = () => {
+          this._composePendingAudio = String(reader.result || '')
+          this._syncComposeMediaPreview()
+          this._snack('Voice note ready. Tap send to post.')
+        }
+        reader.readAsDataURL(blob)
+      }
+      this._audioRecorder.start()
+      this._snack('Recording voice note...')
+      const btn = this._el.querySelector('#audioRecordBtn')
+      if (btn) btn.textContent = 'Stop'
+    } catch {
+      this._stopAudioStream()
+      this._snack('Could not access microphone.')
+    }
+  }
+
+  _stopAudioStream() {
+    try {
+      this._audioStream?.getTracks?.().forEach(track => track.stop())
+    } catch {}
+    this._audioStream = null
+    this._audioRecorder = null
+    const btn = this._el.querySelector('#audioRecordBtn')
+    if (btn) btn.textContent = 'Record'
   }
 
   _syncComposeCharCount(input) {
@@ -426,14 +496,57 @@ export class ConversationScreen {
     input.value = ''
   }
 
+  _pickComposeAudio(input) {
+    const file = input?.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      this._composePendingAudio = String(reader.result || '')
+      this._syncComposeMediaPreview()
+      this._toggleAudioPill()
+    }
+    reader.readAsDataURL(file)
+    input.value = ''
+  }
+
+  _playPendingAudio() {
+    if (!this._composePendingAudio) {
+      this._snack('Attach or record audio first.')
+      return
+    }
+    try {
+      const audio = new Audio(this._composePendingAudio)
+      audio.play().catch(() => {})
+    } catch {
+      this._snack('Could not preview that audio clip.')
+    }
+  }
+
+  _restartPendingAudio() {
+    if (!this._composePendingAudio) {
+      this._snack('Attach or record audio first.')
+      return
+    }
+    this._playPendingAudio()
+  }
+
   _syncComposeMediaPreview() {
     const wrap = this._el.querySelector('#audioPillPreview')
     if (!wrap) return
     if (!this._composePendingMedia) {
-      wrap.innerHTML = ''
-      return
+      if (!this._composePendingAudio) {
+        wrap.innerHTML = ''
+        return
+      }
     }
-    wrap.innerHTML = `<div class="audio-pill-thumb"><img src="${this._composePendingMedia}" alt="attachment preview"><span>Attachment ready</span></div>`
+    const parts = []
+    if (this._composePendingMedia) {
+      parts.push(`<div class="audio-pill-thumb"><img src="${this._composePendingMedia}" alt="attachment preview"><span>Image ready</span></div>`)
+    }
+    if (this._composePendingAudio) {
+      parts.push(`<div class="audio-pill-thumb"><span>Audio ready</span><audio class="bubble-audio" controls src="${this._composePendingAudio}"></audio></div>`)
+    }
+    wrap.innerHTML = parts.join('')
   }
 
   _toggleEmojiPicker(anchor) {
