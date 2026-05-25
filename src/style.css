@@ -83,7 +83,12 @@ body {
   flex-shrink: 0;
   background: var(--bg);
 }
-.status-bar > div { width: 100%; }
+.status-bar > div {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
 .status-left, .status-right, .status-center {
   display: flex;
   align-items: center;
