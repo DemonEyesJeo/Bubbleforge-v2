@@ -1,5 +1,6 @@
 import './style.css'
 import { register, push, currentScreen } from './router.js'
+import { store } from './store.js'
 import { HomeScreen }        from './screens/home.js'
 import { ProjectScreen }      from './screens/project.js'
 import { ConversationScreen } from './screens/conversation.js'
@@ -13,5 +14,9 @@ register('conversation', ConversationScreen)
 register('actor-editor', ActorEditorScreen)
 register('play',         PlayScreen)
 
-// Boot into home once, even if module is re-evaluated during dev reloads.
-if (!currentScreen()) push('home')
+// Boot into the last opened project when available; otherwise go to home.
+if (!currentScreen()) {
+	const lastProjectId = store.getLastOpenedProjectId()
+	if (lastProjectId) push('project', { projectId: lastProjectId })
+	else push('home')
+}

@@ -1,4 +1,5 @@
 const STORAGE_KEY = 'bf_v2_projects'
+const LAST_PROJECT_KEY = 'bf_v2_last_project_id'
 
 function uuid() {
   return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)
@@ -132,6 +133,27 @@ class Store {
 
   getProject(id) { return this._projects.find(p => p.id === id) || null }
 
+  getLastOpenedProjectId() {
+    try {
+      const id = localStorage.getItem(LAST_PROJECT_KEY) || ''
+      return this.getProject(id) ? id : ''
+    } catch {
+      return ''
+    }
+  }
+
+  setLastOpenedProjectId(projectId) {
+    try {
+      if (!projectId || !this.getProject(projectId)) {
+        localStorage.removeItem(LAST_PROJECT_KEY)
+        return
+      }
+      localStorage.setItem(LAST_PROJECT_KEY, projectId)
+    } catch {
+      // ignore storage failures
+    }
+  }
+
   createProject(name = 'New Story') {
     this._snapshot()
     const p = { ...sampleProject(), id: uuid(), name, created_at: now(), updated_at: now(), scenes: [], actors: [], groups: [] }
@@ -140,6 +162,7 @@ class Store {
     p.active_scene_id = firstScene.id
     this._projects.unshift(p)
     this._save()
+    this.setLastOpenedProjectId(p.id)
     this._emit('projects-changed')
     return p
   }
@@ -157,6 +180,10 @@ class Store {
     this._snapshot()
     this._projects = this._projects.filter(p => p.id !== id)
     this._save()
+    const current = this.getLastOpenedProjectId()
+    if (!current) {
+      this.setLastOpenedProjectId(this._projects[0]?.id || '')
+    }
     this._emit('projects-changed')
   }
 

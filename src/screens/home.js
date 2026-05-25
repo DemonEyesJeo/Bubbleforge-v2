@@ -405,7 +405,9 @@ export class HomeScreen {
 
     list.querySelectorAll('.project-card').forEach(card => {
       card.addEventListener('click', () => {
-        push('project', { projectId: card.dataset.projectId })
+        const projectId = card.dataset.projectId
+        store.setLastOpenedProjectId(projectId)
+        push('project', { projectId })
       })
     })
 

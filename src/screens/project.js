@@ -54,6 +54,7 @@ export class ProjectScreen {
   }
 
   bind() {
+    store.setLastOpenedProjectId(this.projectId)
     this._el.querySelector('#projectBackBtn')?.addEventListener('click', () => pop())
     this._el.querySelector('#projectConversationBtn')?.addEventListener('click', () => {
       push('conversation', { projectId: this.projectId })
