@@ -100,6 +100,7 @@ export class ExportRail {
               <div class="hub-list-sub">Tap to choose a file</div>
             </div>
           </div>
+          ${rs.music_path ? '<div class="home-setting-pill ghost" id="clearMusicBtn" style="display:inline-flex;">Clear track</div>' : ''}
         </div>
         <div class="rail-section">
           ${this._slider('Music volume', `${Math.round((rs.music_volume||0.7)*100)}%`, rs.music_volume||0.7, 'music_volume', v => v)}
@@ -128,6 +129,11 @@ export class ExportRail {
   _bindInteractions(body, tab) {
     if (tab === 'audio') {
       body.querySelector('#pickMusicBtn')?.addEventListener('click', () => this._pickMusicFile())
+      body.querySelector('#clearMusicBtn')?.addEventListener('click', () => {
+        store.updateRenderSettings(this.projectId, { music_path: null, music_title: '' })
+        this._renderTab('audio')
+        this._snack('Background music cleared')
+      })
     }
 
     body.querySelectorAll('.pill').forEach(pill => {
