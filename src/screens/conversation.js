@@ -11,6 +11,7 @@ export class ConversationScreen {
     this._activeActorId = null
     this._hub = null
     this._exportRail = null
+    this._audioToolsOpen = false
     this._onChange = () => this._refresh()
   }
 
@@ -36,7 +37,22 @@ export class ConversationScreen {
       <div class="conversation-canvas" id="convCanvas"></div>
       <div class="command-center">
         <div class="speaker-strip" id="speakerStrip"></div>
+        <div class="audio-pill" id="audioPill">
+          <div class="audio-pill-grid">
+            <div class="audio-pill-button" data-action="attach">${icons.attach}</div>
+            <div class="audio-pill-button" data-action="mic">${icons.mic}</div>
+            <div class="audio-pill-button" data-action="play">${icons.play}</div>
+            <div class="audio-pill-button" data-action="rewind">${icons.rewind}</div>
+          </div>
+          <div class="audio-pill-divider"></div>
+          <div class="audio-pill-timeline">
+            <div class="audio-pill-title">Audio tools</div>
+            <div class="audio-pill-sub" id="audioPillSub">Hidden while typing</div>
+            <div class="audio-pill-track"><div class="audio-pill-fill" style="width:38%"></div></div>
+          </div>
+        </div>
         <div class="compose-row">
+          <div class="nav-btn" id="audioToggleBtn" title="Audio">${icons.music}</div>
           <textarea class="compose-input" id="composeInput" rows="1" placeholder="Message…"></textarea>
           <div class="nav-btn" id="emojiBtn" title="Emoji">${icons.emoji}</div>
           <div class="nav-btn" id="exportBtn" title="Export">${icons.export}</div>
@@ -58,7 +74,21 @@ export class ConversationScreen {
     })
     this._el.querySelector('#menuBtn').addEventListener('click', () => this._openHub())
     this._el.querySelector('#exportBtn').addEventListener('click', () => this._openExport())
+    this._el.querySelector('#audioToggleBtn').addEventListener('click', () => this._toggleAudioPill())
     this._el.querySelector('#emojiBtn').addEventListener('click', e => this._toggleEmojiPicker(e.currentTarget))
+
+    this._el.querySelectorAll('.audio-pill-button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const action = btn.dataset.action
+        if (action === 'play') {
+          this._snack('Audio preview is coming from the v1 pill in the next slice.')
+        } else if (action === 'rewind') {
+          this._snack('Rewind audio tools is not wired yet.')
+        } else if (action === 'attach' || action === 'mic') {
+          this._snack(`${action === 'attach' ? 'Attach' : 'Mic'} is not wired yet.`)
+        }
+      })
+    })
 
     const input = this._el.querySelector('#composeInput')
     const sendBtn = this._el.querySelector('#sendBtn')
@@ -267,6 +297,14 @@ export class ConversationScreen {
     const overlayLayer = document.getElementById('overlay-layer')
     this._exportRail = new ExportRail(overlayLayer, this.projectId, () => { this._exportRail = null })
     this._exportRail.mount()
+  }
+
+  _toggleAudioPill() {
+    this._audioToolsOpen = !this._audioToolsOpen
+    const pill = this._el.querySelector('#audioPill')
+    const sub = this._el.querySelector('#audioPillSub')
+    if (pill) pill.classList.toggle('open', this._audioToolsOpen)
+    if (sub) sub.textContent = this._audioToolsOpen ? 'Ready for voice and media tools' : 'Hidden while typing'
   }
 
   _toggleEmojiPicker(anchor) {
