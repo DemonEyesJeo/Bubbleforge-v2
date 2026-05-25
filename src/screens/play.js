@@ -27,6 +27,8 @@ export class PlayScreen {
     this._removeSwipeListeners = null
     this._playheadMs = 0
     this._playCtx = null
+    this._music = null
+    this._musicFadeTimer = null
   }
 
   render() {
@@ -388,6 +390,33 @@ export class PlayScreen {
       this._kb?.hide()
       this._setKeyboardActive(false)
     }
+
+    if (rs.music_path) {
+      const src = String(rs.music_path)
+      if (!this._music || this._music.src !== src) {
+        this._music = new Audio(src)
+      }
+      const targetVolume = rs.music_volume ?? 0.7
+      this._music.loop = rs.loop_music ?? true
+      clearInterval(this._musicFadeTimer)
+      this._musicFadeTimer = null
+      if (rs.fade_music && this._music.currentTime === 0) {
+        this._music.volume = 0
+        let vol = 0
+        this._musicFadeTimer = setInterval(() => {
+          vol = Math.min(targetVolume, vol + 0.05)
+          if (this._music) this._music.volume = vol
+          if (vol >= targetVolume) {
+            clearInterval(this._musicFadeTimer)
+            this._musicFadeTimer = null
+          }
+        }, 80)
+      } else {
+        this._music.volume = targetVolume
+      }
+      this._music.play().catch(() => {})
+    }
+
     this._runNext(p, scene, rs)
   }
 
@@ -395,15 +424,23 @@ export class PlayScreen {
     this._playing = false
     this._el.querySelector('#playBtn').innerHTML = icons.play
     clearTimeout(this._animTimeout)
+    this._music?.pause()
   }
 
   _stopPlayback() {
     this._playing = false
     clearTimeout(this._animTimeout)
+    clearInterval(this._musicFadeTimer)
+    this._musicFadeTimer = null
     this._setGhostText('')
     this._setKeyboardActive(false)
     const playBtn = this._el?.querySelector('#playBtn')
     if (playBtn) playBtn.innerHTML = icons.play
+    if (this._music) {
+      this._music.pause()
+      this._music.currentTime = 0
+      this._music = null
+    }
     this._kb?.destroy()
     this._kb = null
   }
