@@ -594,8 +594,12 @@ export class ConversationScreen {
       if (seek) {
         seek.value = '0'
         seek.max = '0.1'
+        seek.disabled = true
       }
-      if (playBtn) playBtn.textContent = '▶'
+      if (playBtn) {
+        playBtn.textContent = '▶'
+        playBtn.disabled = true
+      }
       if (rewindBtn) rewindBtn.disabled = true
       return
     }
@@ -614,6 +618,7 @@ export class ConversationScreen {
     if (seek) {
       seek.max = String(Math.max(0.1, duration))
       seek.value = String(Math.min(current, duration))
+      seek.disabled = Boolean(this._audioRecorder && this._audioRecorder.state === 'recording')
       if (!seek.dataset.bound) {
         seek.dataset.bound = '1'
         seek.addEventListener('input', () => {
@@ -623,8 +628,11 @@ export class ConversationScreen {
         })
       }
     }
-    if (playBtn) playBtn.textContent = audio.paused ? '▶' : '❚❚'
-    if (rewindBtn) rewindBtn.disabled = false
+    if (playBtn) {
+      playBtn.textContent = audio.paused ? '▶' : '❚❚'
+      playBtn.disabled = Boolean(this._audioRecorder && this._audioRecorder.state === 'recording')
+    }
+    if (rewindBtn) rewindBtn.disabled = Boolean(this._audioRecorder && this._audioRecorder.state === 'recording')
   }
 
   _toggleComposeMusicPlay() {
