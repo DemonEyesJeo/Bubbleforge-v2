@@ -161,6 +161,9 @@ export class PlayScreen {
         <div class="scene-divider-label">${scene?.name?.toUpperCase() || 'SCENE'}</div>
         <div class="scene-divider-rule right"></div>
       </div>`
+    if (scene?.quote) {
+      html += `<div class="scene-quote">${scene.quote}</div>`
+    }
 
     html += renderMessages(messages, p.actors, {
       showNames: rs.show_names !== false,

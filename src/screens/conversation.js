@@ -255,11 +255,14 @@ export class ConversationScreen {
         <div class="scene-divider-label">${scene.name.toUpperCase()}</div>
         <div class="scene-divider-rule right"></div>
       </div>`
+    const sceneQuote = scene.quote
+      ? `<div class="scene-quote">${scene.quote}</div>`
+      : ''
 
     canvas.innerHTML = sceneHeader + renderMessages(scene.messages, p.actors, {
       showNames: rs.show_names !== false,
       showTimestamps: rs.show_timestamps === true,
-    })
+    }) + sceneQuote
     canvas.scrollTop = canvas.scrollHeight
 
     // Bubble tap → context menu
