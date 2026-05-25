@@ -463,6 +463,8 @@ class RenderSettings:
     bg_dim: float = 0.0          # 0.0 = no overlay, 1.0 = fully black
     music_path: Optional[str] = None
     music_volume: float = 0.8
+    loop_music: bool = True
+    fade_music: bool = True
     export_fps: int = 30
     export_keyboard_animation_enabled: bool = True
     export_typing_fakeout_enabled: bool = True
@@ -3153,6 +3155,8 @@ def export_mp4(proj: Project, out_path: str,
                sfx_enabled: bool = False,
                sfx_type: str = "off",
                music_volume: float = 0.8,
+               loop_music: bool = True,
+               fade_music: bool = True,
                encode_quality: int = 8) -> None:
     """
     Export the project as an MP4 video with per-message timing.
@@ -3408,6 +3412,8 @@ def export_mp4(proj: Project, out_path: str,
     music_volume = _as_float(music_volume, 0.8)
     if abs(music_volume - 0.8) < 1e-6:
         music_volume = _as_float(getattr(proj.settings, "music_volume", 0.8) or 0.8, 0.8)
+    loop_music = bool(loop_music if loop_music is not None else getattr(proj.settings, "loop_music", True))
+    fade_music = bool(fade_music if fade_music is not None else getattr(proj.settings, "fade_music", True))
 
     sfx_for_mix = (sfx_type_norm not in ("", "off", "none"))
     need_audio = music_path or sfx_for_mix or any(getattr(m, "audio_path", None) for m in proj.messages)
@@ -3468,10 +3474,16 @@ def _mix_audio(video_path: str, total_frames: int, fps: float,
             music_trimmed = str(tmp / "music.wav")
             vol_db = 20 * math.log10(max(0.01, music_volume))
             fade_start = max(0, total_dur - 1.5)
+            music_input_args = ["-stream_loop", "-1"] if loop_music else []
+            audio_filters = [f"volume={vol_db:.1f}dB"]
+            if fade_music:
+                audio_filters.append(f"afade=t=out:st={fade_start:.2f}:d=1.5")
             subprocess.run([
-                ffmpeg, "-y", "-i", music_path,
+                ffmpeg, "-y",
+                *music_input_args,
+                "-i", music_path,
                 "-t", str(total_dur),
-                "-af", f"volume={vol_db:.1f}dB,afade=t=out:st={fade_start:.2f}:d=1.5",
+                "-af", ",".join(audio_filters),
                 "-ar", "44100", "-ac", "2",
                 music_trimmed,
             ], check=True, capture_output=True)

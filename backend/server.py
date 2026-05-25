@@ -185,6 +185,8 @@ def _project_from_frontend(payload: Dict[str, Any]) -> Tuple[Project, Tuple[int,
     proj.settings.export_typing_fakeout_enabled = bool(rs.get("fakeout", True))
     proj.settings.music_path = rs.get("music_path") or None
     proj.settings.music_volume = _safe_float(rs.get("music_volume", 0.7), 0.7)
+    proj.settings.loop_music = bool(rs.get("loop_music", True))
+    proj.settings.fade_music = bool(rs.get("fade_music", True))
     proj.settings.sfx_type = str(rs.get("sfx_type") or "soft").strip().lower() or "soft"
     proj.settings.keyboard_style = str(rs.get("keyboard_style") or "ios").strip().lower() or "ios"
 
@@ -253,6 +255,8 @@ def _run_export(job_id, project):
                 music_path=proj.settings.music_path,
                 sfx_type=str(proj.settings.sfx_type or 'soft'),
                 music_volume=float(proj.settings.music_volume or 0.7),
+                loop_music=bool(getattr(proj.settings, 'loop_music', True)),
+                fade_music=bool(getattr(proj.settings, 'fade_music', True)),
             )
         elif fmt == 'pdf':
             out_path = out_dir / f'bubbleforge_{job_id}.pdf'
