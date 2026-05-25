@@ -576,14 +576,28 @@ export class ConversationScreen {
   _pickComposeMusic(input) {
     const file = input?.files?.[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      const url = String(reader.result || '')
-      this._setComposeMusicSource(url, file.name)
-      store.updateRenderSettings(this.projectId, { music_path: url, music_title: file.name })
-    }
-    reader.readAsDataURL(file)
+    this._uploadComposeMusic(file)
     input.value = ''
+  }
+
+  async _uploadComposeMusic(file) {
+    this._snack('Uploading music…')
+    try {
+      const fd = new FormData()
+      fd.append('music', file)
+      const resp = await fetch('/api/music-upload', { method: 'POST', body: fd })
+      const data = await resp.json()
+      if (!resp.ok || !data?.path) {
+        throw new Error(data?.error || 'Upload failed')
+      }
+
+      const previewUrl = URL.createObjectURL(file)
+      this._setComposeMusicSource(previewUrl, file.name)
+      store.updateRenderSettings(this.projectId, { music_path: data.path, music_title: file.name })
+      this._snack(`Music selected: ${file.name}`)
+    } catch (err) {
+      this._snack(err?.message || 'Could not upload music file')
+    }
   }
 
   _setComposeMusicSource(url, title) {
@@ -618,7 +632,8 @@ export class ConversationScreen {
     const volumeLabel = this._el?.querySelector('#composeMusicVolumeLabel')
     const loop = this._el?.querySelector('#composeMusicLoop')
     const fade = this._el?.querySelector('#composeMusicFade')
-    const url = rs.music_path || this._composeMusicUrl || ''
+    const exportPath = rs.music_path || ''
+    const url = this._composeMusicUrl || ''
     const musicTitle = rs.music_title || this._composeMusicTitle || (url ? 'Selected audio' : 'No audio selected')
     const musicVolume = Number.isFinite(Number(rs.music_volume)) ? Math.max(0, Math.min(1, Number(rs.music_volume))) : 0.7
     const musicLoop = rs.loop_music !== false
@@ -631,7 +646,7 @@ export class ConversationScreen {
     if (fade) fade.checked = musicFade
 
     if (!url) {
-      if (sub) sub.textContent = 'Pick a background track for this story'
+      if (sub) sub.textContent = exportPath ? 'Track linked for export. Pick again to preview.' : 'Pick a background track for this story'
       if (now) now.textContent = '00:00.0'
       if (total) total.textContent = '00:00'
       if (seek) {
@@ -731,6 +746,11 @@ export class ConversationScreen {
       if (this._composeMusicAudio) {
         this._composeMusicAudio.pause()
         this._composeMusicAudio.src = ''
+      }
+    } catch {}
+    try {
+      if (this._composeMusicUrl && this._composeMusicUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(this._composeMusicUrl)
       }
     } catch {}
     this._composeMusicAudio = null
