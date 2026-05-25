@@ -151,6 +151,8 @@ export class PlayScreen {
   _renderCanvas(p, scene, messages) {
     const canvas = this._el.querySelector('#playCanvas')
     const actorMap = Object.fromEntries(p.actors.map(a => [a.id, a]))
+    const rs = p.render_settings || {}
+    canvas.classList.toggle('is-light', rs.dark_background === false)
 
     let html = `
       <div class="msg-timestamp">Today</div>
@@ -160,7 +162,10 @@ export class PlayScreen {
         <div class="scene-divider-rule right"></div>
       </div>`
 
-    html += renderMessages(messages, p.actors)
+    html += renderMessages(messages, p.actors, {
+      showNames: rs.show_names !== false,
+      showTimestamps: rs.show_timestamps === true,
+    })
     canvas.innerHTML = html
     canvas.scrollTop = canvas.scrollHeight
   }

@@ -245,6 +245,8 @@ export class ConversationScreen {
       canvas.innerHTML = `<div class="empty-state"><p style="color:var(--t3);">No scenes yet.</p></div>`
       return
     }
+    const rs = p.render_settings || {}
+    canvas.classList.toggle('is-light', rs.dark_background === false)
 
     const sceneHeader = `
       <div class="msg-timestamp">Today</div>
@@ -254,7 +256,10 @@ export class ConversationScreen {
         <div class="scene-divider-rule right"></div>
       </div>`
 
-    canvas.innerHTML = sceneHeader + renderMessages(scene.messages, p.actors)
+    canvas.innerHTML = sceneHeader + renderMessages(scene.messages, p.actors, {
+      showNames: rs.show_names !== false,
+      showTimestamps: rs.show_timestamps === true,
+    })
     canvas.scrollTop = canvas.scrollHeight
 
     // Bubble tap → context menu

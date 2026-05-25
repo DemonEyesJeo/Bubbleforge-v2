@@ -128,7 +128,11 @@ export class HubPanel {
       body.innerHTML = this._settingsTab(p)
       body.querySelectorAll('.toggle').forEach(t => {
         t.addEventListener('click', () => {
-          t.classList.toggle('on'); t.classList.toggle('off')
+          const key = t.dataset.key
+          if (!key) return
+          const next = !(p.render_settings?.[key] !== false)
+          store.updateRenderSettings(this.projectId, { [key]: next })
+          this._renderTab('settings')
         })
       })
     }
@@ -221,15 +225,15 @@ export class HubPanel {
       <div style="padding:0 18px;">
         <div class="toggle-row">
           <div class="toggle-row-text"><div class="toggle-row-label">Show actor names</div></div>
-          <div class="toggle ${rs.show_names ? 'on' : 'off'}"></div>
+          <div class="toggle ${rs.show_names !== false ? 'on' : 'off'}" data-key="show_names"></div>
         </div>
         <div class="toggle-row">
           <div class="toggle-row-text"><div class="toggle-row-label">Show timestamps</div></div>
-          <div class="toggle ${rs.show_timestamps !== false ? 'on' : 'off'}"></div>
+          <div class="toggle ${rs.show_timestamps !== false ? 'on' : 'off'}" data-key="show_timestamps"></div>
         </div>
         <div class="toggle-row">
           <div class="toggle-row-text"><div class="toggle-row-label">Dark background</div></div>
-          <div class="toggle on"></div>
+          <div class="toggle ${rs.dark_background !== false ? 'on' : 'off'}" data-key="dark_background"></div>
         </div>
       </div>`
   }

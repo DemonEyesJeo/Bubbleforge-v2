@@ -3,7 +3,10 @@
  * Groups consecutive messages from the same actor and applies
  * first/mid/last corner radius variants.
  */
-export function renderMessages(messages, actors, onBubbleTap) {
+export function renderMessages(messages, actors, options = {}) {
+  if (typeof options === 'function') options = {}
+  const showNames = options.showNames !== false
+  const showTimestamps = options.showTimestamps === true
   if (!messages.length) {
     return `<div style="flex:1;display:flex;align-items:center;justify-content:center;padding:40px;">
       <p style="color:var(--t3);font-size:14px;text-align:center;">No messages yet.<br>Pick an actor below and start typing.</p>
@@ -34,14 +37,17 @@ export function renderMessages(messages, actors, onBubbleTap) {
       }
 
       const showAvatar = isLast || isSolo
-      const showName   = isFirst || isSolo
+      const showName   = showNames && (isFirst || isSolo)
 
       const avatarEl = showAvatar
         ? `<div class="avatar" style="background:${actor.color};box-shadow:0 0 0 2px rgba(${colorRgb},0.32);">${actor.name[0].toUpperCase()}</div>`
         : `<div class="avatar ghost"></div>`
 
-      const nameEl = showName && !isRight
-        ? `<div class="bubble-sender" style="color:rgba(${colorRgb},0.62);">${actor.name}</div>`
+      const nameEl = showName
+        ? `<div class="bubble-sender ${isRight ? 'right' : ''}" style="color:rgba(${colorRgb},0.62);">${actor.name}</div>`
+        : ''
+      const tsEl = showTimestamps
+        ? `<div class="bubble-meta">${formatMessageTime(msg.ts)}</div>`
         : ''
 
       let bubbleStyle = ''
@@ -64,6 +70,7 @@ export function renderMessages(messages, actors, onBubbleTap) {
               <div class="bubble-text">${escHtml(msg.text)}</div>
               ${msg.reaction ? `<div class="bubble-reaction" aria-label="Reaction">${escHtml(msg.reaction)}</div>` : ''}
             </div>
+            ${tsEl}
           </div>
         </div>`
     }
@@ -113,4 +120,13 @@ function escHtml(str) {
 
 function escAttr(str) {
   return String(str).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+}
+
+function formatMessageTime(ts) {
+  const date = new Date(Number(ts || Date.now()))
+  const hours = date.getHours()
+  const mins = String(date.getMinutes()).padStart(2, '0')
+  const ampm = hours >= 12 ? 'PM' : 'AM'
+  const hour12 = hours % 12 || 12
+  return `${hour12}:${mins} ${ampm}`
 }

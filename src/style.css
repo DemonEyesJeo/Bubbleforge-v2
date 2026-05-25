@@ -957,6 +957,16 @@ body {
 .emoji-item:hover { background: var(--s2); }
 .emoji-item.active { background: rgba(41,121,255,0.16); }
 .bubble-text { white-space: pre-wrap; }
+.bubble-sender.right {
+  text-align: right;
+}
+.bubble-meta {
+  margin-top: 4px;
+  color: var(--t3);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
 .bubble-media {
   display: block;
   max-width: 100%;
@@ -1280,6 +1290,10 @@ body {
   background: rgba(255,255,255,0.9);
 }
 
+.conversation-canvas.is-light,
+.play-canvas.is-light {
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+}
 .side-picker { display: flex; gap: 8px; padding: 12px 20px 0; }
 .side-opt {
   flex: 1; padding: 11px; border-radius: 12px; text-align: center;
