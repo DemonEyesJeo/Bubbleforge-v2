@@ -10,6 +10,17 @@ Chat-style story export app. Build cinematic conversations, export MP4 videos, P
 
 ## Development
 
+### Run Today (Fastest)
+
+```bash
+# If your Python virtual environment is already active:
+npm install
+npm run dev:today
+
+# Frontend: http://127.0.0.1:5173
+# Backend:  http://127.0.0.1:5000
+```
+
 ### Run Today (Two Terminals)
 
 ```bash
