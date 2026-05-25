@@ -367,6 +367,8 @@ export class ExportRail {
           jobId,
           outputPath: job.output_path,
           outputUrl: job.output_url,
+          outputType: job.output_type,
+          frameCount: typeof job.frame_count === 'number' ? job.frame_count : 0,
           error: job.error,
           startedAt: this._exportState?.startedAt || Date.now(),
         }
@@ -422,6 +424,10 @@ export class ExportRail {
     const canceled = st.status === 'canceled'
     const errored = st.status === 'error'
 
+    const doneLabel = st.outputType === 'png_sequence'
+      ? `PNG sequence (${st.frameCount || 0} frame${st.frameCount === 1 ? '' : 's'})`
+      : fmtLabel
+
     cta.style.display = running || previewing ? 'none' : 'block'
     this._rail.querySelectorAll('.rail-tab').forEach(t => t.classList.toggle('disabled', running || previewing))
     if (!running) this._rail.classList.remove('is-exporting')
@@ -460,7 +466,7 @@ export class ExportRail {
       <div class="export-progress-wrap">
         <div class="export-progress-title">${done ? 'Export complete' : canceled ? 'Export canceled' : errored ? 'Export failed' : `Exporting ${fmtLabel}`}</div>
         <div class="export-progress-sub ${errored ? 'is-error' : ''}">
-          ${errored ? (st.message || st.error || 'An unknown export error occurred.') : canceled ? 'The export was canceled.' : done ? `${fmtLabel} export is ready in ${this._formatExportDuration(st.startedAt)}.` : (st.status === 'cancelling' ? 'Stopping export…' : (st.message || 'Rendering and mixing audio...'))}
+          ${errored ? (st.message || st.error || 'An unknown export error occurred.') : canceled ? 'The export was canceled.' : done ? `${doneLabel} export is ready in ${this._formatExportDuration(st.startedAt)}.` : (st.status === 'cancelling' ? 'Stopping export…' : (st.message || 'Rendering and mixing audio...'))}
         </div>
         <div class="export-progress-track">
           <div class="export-progress-fill" style="width:${progress}%"></div>
@@ -468,7 +474,7 @@ export class ExportRail {
         <div class="export-progress-percent">${progress}%</div>
         ${running && st.jobId ? '<button class="export-share-btn" id="exportCancelBtn">Cancel Export</button>' : ''}
         ${done && st.outputPath ? `<div class="export-output-path">${st.outputPath}</div>` : ''}
-        ${done && st.outputUrl ? `<a class="export-output-path" href="${st.outputUrl}" target="_blank" rel="noopener noreferrer">Download exported file</a>` : ''}
+        ${done && st.outputUrl ? `<a class="export-output-path" href="${st.outputUrl}" target="_blank" rel="noopener noreferrer">${st.outputType === 'png_sequence' ? 'Download PNG sequence ZIP' : 'Download exported file'}</a>` : ''}
         ${done ? `<button class="export-share-btn" id="exportShareBtn">${st.outputUrl ? 'Share' : 'Copy output path'}</button>` : ''}
         ${!running && !previewing ? '<button class="export-share-btn" id="exportResetBtn">Back to export settings</button>' : ''}
       </div>

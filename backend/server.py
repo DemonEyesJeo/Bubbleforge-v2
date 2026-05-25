@@ -6,6 +6,7 @@ with progress updates available via /api/export/<job_id>.
 
 import threading
 import uuid
+from shutil import make_archive
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
@@ -145,6 +146,11 @@ def _export_png_sequence(proj: Project, out_dir: Path, size: Tuple[int, int]) ->
     out_dir.mkdir(parents=True, exist_ok=True)
     for index, page in enumerate(_render_pdf_pages(proj, size), start=1):
         page.save(out_dir / f"scene_{index:02d}.png")
+
+
+def _zip_png_sequence(out_dir: Path) -> Path:
+    archive_path = Path(make_archive(str(out_dir), 'zip', root_dir=str(out_dir)))
+    return archive_path
 
 
 def _project_from_frontend(payload: Dict[str, Any]) -> Tuple[Project, Tuple[int, int], str]:
@@ -326,6 +332,7 @@ def _run_export(job_id, project):
             if cancel_event is not None and cancel_event.is_set():
                 jobs[job_id]['status'] = 'canceled'
                 return
+            jobs[job_id]['output_type'] = 'mp4'
         elif fmt == 'pdf':
             if cancel_event is not None and cancel_event.is_set():
                 jobs[job_id]['status'] = 'canceled'
@@ -333,6 +340,7 @@ def _run_export(job_id, project):
             out_path = out_dir / f'bubbleforge_{job_id}.pdf'
             jobs[job_id]['progress'] = 35
             _export_pdf(proj, out_path, out_size)
+            jobs[job_id]['output_type'] = 'pdf'
         elif fmt == 'png_sequence':
             if cancel_event is not None and cancel_event.is_set():
                 jobs[job_id]['status'] = 'canceled'
@@ -340,13 +348,24 @@ def _run_export(job_id, project):
             out_path = out_dir / f'bubbleforge_{job_id}_png'
             jobs[job_id]['progress'] = 35
             _export_png_sequence(proj, out_path, out_size)
+            frame_count = len(list(out_path.glob('*.png')))
+            jobs[job_id]['frame_count'] = frame_count
+            jobs[job_id]['progress'] = 80
+            zip_path = _zip_png_sequence(out_path)
+            jobs[job_id]['progress'] = 95
+            jobs[job_id]['output_type'] = 'png_sequence'
+            jobs[job_id]['output_archive_path'] = str(zip_path)
+            jobs[job_id]['output_archive_url'] = f"/api/exports/{zip_path.name}"
         else:
             raise ValueError(f"Format '{fmt}' is not supported yet")
 
         jobs[job_id]['status'] = 'done'
         jobs[job_id]['progress'] = 100
         jobs[job_id]['output_path'] = str(out_path)
-        jobs[job_id]['output_url'] = f"/api/exports/{out_path.name}" if out_path.is_file() else None
+        if out_path.is_file():
+            jobs[job_id]['output_url'] = f"/api/exports/{out_path.name}"
+        else:
+            jobs[job_id]['output_url'] = jobs[job_id].get('output_archive_url')
     except Exception as e:
         jobs[job_id]['status'] = 'error'
         jobs[job_id]['error'] = str(e)
