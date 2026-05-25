@@ -456,7 +456,7 @@ export class ExportRail {
           await navigator.clipboard.writeText(text)
           this._snack(url ? 'Export link copied to clipboard' : 'Export path copied to clipboard')
         } catch {
-          this._snack('Could not share export path')
+          this._snack(url ? 'Could not share export link' : 'Could not share export path')
         }
       })
     }
