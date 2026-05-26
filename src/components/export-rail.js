@@ -100,7 +100,7 @@ export class ExportRail {
         <div class="rail-section">
           <div class="rail-section-title">Background Music</div>
           <div class="hub-list-item" style="background:var(--s1);border-radius:12px;margin-bottom:8px;" id="pickMusicBtn">
-            <div class="hub-list-icon" style="background:rgba(41,121,255,0.10);">${icons.music}</div>
+            <div class="hub-list-icon" style="background:rgba(var(--accent-rgb),0.10);">${icons.music}</div>
             <div class="hub-list-text">
               <div class="hub-list-title">${rs.music_title || (rs.music_path ? rs.music_path.split('/').pop() : 'No track selected')}</div>
               <div class="hub-list-sub">Tap to choose a file</div>

@@ -30,19 +30,16 @@ export class ProjectScreen {
       <div class="project-body">
         <div class="project-actions">
           <button class="project-action-card primary" id="projectConversationBtn" type="button">
-            <div class="project-action-icon">${icons.scene}</div>
+            <div class="project-action-icon">${icons.bubbleChat}</div>
             <div class="project-action-title">Conversation</div>
-            <div class="project-action-sub">Create blank conversation scene</div>
           </button>
           <button class="project-action-card" id="projectTitleBtn" type="button">
-            <div class="project-action-icon">T</div>
+            <div class="project-action-icon">${icons.signpost}</div>
             <div class="project-action-title">Title</div>
-            <div class="project-action-sub">Create blank title scene</div>
           </button>
           <button class="project-action-card" id="projectQuoteBtn" type="button">
-            <div class="project-action-icon">❝</div>
+            <div class="project-action-icon">${icons.quoteMarks}</div>
             <div class="project-action-title">Quote</div>
-            <div class="project-action-sub">Create blank quote scene</div>
           </button>
         </div>
 
@@ -89,9 +86,8 @@ export class ProjectScreen {
 
     this._el.querySelector('#projectNavTitle').textContent = project.name || 'Project'
     this._el.querySelector('#projectNavSub').textContent = `${sceneCount} scene${sceneCount === 1 ? '' : 's'} · ${messageCount} messages`
-    const status = store.getSceneStatusBar(this.projectId, scene?.id)
     const host = this._el.querySelector('#statusBarHost')
-    if (host) host.innerHTML = renderStatusBar(status)
+    if (host) host.innerHTML = renderStatusBar()
     this._renderSceneList(project)
   }
 
@@ -105,14 +101,72 @@ export class ProjectScreen {
     const scene = store.addScene(this.projectId, draft.name)
     if (!scene) return
 
-    store.updateScene(this.projectId, scene.id, { kind, quote: draft.quote })
+    const scenePatch = { kind, quote: draft.quote }
+    if (kind === 'title') {
+      scenePatch.title_data = {
+        title: '',
+        subtitle: '',
+        bg_type: 'gradient',
+        bg_color_a: '#1a1a2e',
+        bg_color_b: '#16213e',
+        bg_image: null,
+        text_align: 'center',
+        title_size: 36,
+        subtitle_size: 18,
+        text_color: '#ffffff',
+        text_shadow: true,
+        blur: false,
+      }
+    }
+    if (kind === 'quote') {
+      scenePatch.quote_data = {
+        platform: 'x',
+        avatar: null,
+        avatar_color: '#1DA1F2',
+        display_name: '',
+        handle: '',
+        verified: false,
+        date: '',
+        text: '',
+        image: null,
+        stats: {
+          replies: '',
+          retweets: '',
+          likes: '',
+          views: '',
+        },
+        show_stats: true,
+        show_verified: true,
+        bg_color: '#000000',
+        text_color: '#ffffff',
+      }
+    }
+    store.updateScene(this.projectId, scene.id, scenePatch)
     store.setActiveScene(this.projectId, scene.id)
 
-    if (kind === 'conversation') {
-      push('conversation', { projectId: this.projectId })
-      return
+    if (kind === 'title') {
+      push('title-editor', { projectId: this.projectId, sceneId: scene.id })
+    } else if (kind === 'quote') {
+      push('quote-editor', { projectId: this.projectId, sceneId: scene.id })
+    } else {
+      push('conversation', { projectId: this.projectId, sceneId: scene.id })
     }
-    this._refresh()
+  }
+
+  _esc(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  }
+
+  _sceneCoverContent(kind, scene) {
+    if (kind === 'title') {
+      const title = this._esc(scene.title_data?.title || 'Title Scene')
+      return `<div class="scene-cover-title"><div class="scene-cover-title-t">T</div><div class="scene-cover-title-text">${title}</div></div>`
+    }
+    if (kind === 'quote') {
+      const qt = this._esc(scene.quote_data?.text || 'Quote Scene')
+      return `<div class="scene-cover-quote"><div class="scene-cover-quote-mark">&ldquo;</div><div class="scene-cover-quote-text">${qt}</div></div>`
+    }
+    return null
   }
 
   _sceneKind(scene) {
@@ -136,20 +190,21 @@ export class ProjectScreen {
       const kindLabel = kind.charAt(0).toUpperCase() + kind.slice(1)
       const name = scene?.name?.trim() || (kind === 'title' ? 'Untitled' : kind === 'quote' ? 'Quote' : 'Scene')
       const messageCount = (scene.messages || []).length
-      const coverRows = this._sceneCoverBubbles(scene, project)
+      const specialCover = this._sceneCoverContent(kind, scene)
+      const coverRows = specialCover ? null : this._sceneCoverBubbles(scene, project)
       return `
         <div class="project-card project-scene-card" data-scene-id="${scene.id}" role="button" tabindex="0">
-          <div class="project-cover" style="background:${this._coverGradientFromScene(scene, project)};">
+          <div class="project-cover" style="${specialCover ? '' : `background:${this._coverGradientFromScene(scene, project)};`}">
             <div class="project-cover-overlay"></div>
             <div style="position:absolute;top:8px;right:8px;display:flex;gap:6px;z-index:2;">
               <button class="project-scene-menu-btn" data-scene-id="${scene.id}" type="button" style="border:0;background:rgba(0,0,0,0.38);color:#fff;border-radius:10px;padding:5px 8px;font-size:11px;cursor:pointer;">•••</button>
             </div>
-            ${coverRows ? `<div class="project-cover-bubbles">${coverRows}</div>` : '<div class="project-cover-empty">No messages yet</div>'}
+            ${specialCover || (coverRows ? `<div class="project-cover-bubbles">${coverRows}</div>` : '<div class="project-cover-empty">No messages yet</div>')}
           </div>
           <div class="project-info">
             <div>
               <div class="project-name">${i + 1}. ${name}</div>
-              <div class="project-meta">${kindLabel} · ${messageCount} message${messageCount === 1 ? '' : 's'}</div>
+              <div class="project-meta">${messageCount} message${messageCount === 1 ? '' : 's'}</div>
             </div>
             <div class="project-kind-pill">${kindLabel}</div>
           </div>
@@ -162,7 +217,15 @@ export class ProjectScreen {
         const sceneId = row.dataset.sceneId
         if (!sceneId) return
         store.setActiveScene(this.projectId, sceneId)
-        push('conversation', { projectId: this.projectId, sceneId })
+        const scene = project.scenes.find(item => item.id === sceneId)
+        const kind = this._sceneKind(scene)
+        if (kind === 'title') {
+          push('title-editor', { projectId: this.projectId, sceneId })
+        } else if (kind === 'quote') {
+          push('quote-editor', { projectId: this.projectId, sceneId })
+        } else {
+          push('conversation', { projectId: this.projectId, sceneId })
+        }
       }
 
       row.addEventListener('click', openScene)
@@ -264,10 +327,22 @@ export class ProjectScreen {
         close()
         return
       }
-      const ok = window.confirm(`Delete "${scene.name || 'Scene'}"?`)
-      if (!ok) return
-      store.deleteScene(this.projectId, sceneId)
-      close()
+      const actionsEl = sheet.querySelector('.new-project-actions')
+      if (!actionsEl) return
+      actionsEl.innerHTML = `
+        <div class="sheet-confirm">
+          <p class="sheet-confirm-title">Delete &ldquo;${this._esc(scene.name || 'Scene')}&rdquo;?</p>
+          <p class="sheet-confirm-sub">This cannot be undone.</p>
+          <div class="sheet-confirm-actions">
+            <button class="sheet-btn" id="confirmCancel">Cancel</button>
+            <button class="sheet-btn danger" id="confirmDelete">Delete</button>
+          </div>
+        </div>`
+      sheet.querySelector('#confirmCancel')?.addEventListener('click', close)
+      sheet.querySelector('#confirmDelete')?.addEventListener('click', () => {
+        store.deleteScene(this.projectId, sceneId)
+        close()
+      })
     })
 
     requestAnimationFrame(() => {

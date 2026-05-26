@@ -5,25 +5,31 @@ import { hexToRgb } from '../components/bubble.js'
 import { renderStatusBar } from '../components/status-bar.js'
 
 export class ActorEditorScreen {
-  constructor({ projectId, actorId }) {
+  constructor({ projectId, actorId, sceneId = null }) {
     this.projectId = projectId
     this.actorId   = actorId
+    this.sceneId   = sceneId
     this.isNew     = !actorId
     this._color    = ACTOR_COLORS[0]
     this._side     = 'left'
     this._name     = ''
-    this._avatar   = null
+    this._pendingAvatar = null
+    this._avatarTouched = false
   }
 
   render() {
     const p     = store.getProject(this.projectId)
-    const actor = this.actorId ? p?.actors.find(a => a.id === this.actorId) : null
+    const baseActor = this.actorId ? p?.actors.find(a => a.id === this.actorId) : null
+    const actor = (this.actorId && this.sceneId)
+      ? (store.getEffectiveActor(this.projectId, this.sceneId, this.actorId) || baseActor)
+      : baseActor
 
     if (actor) {
       this._color = actor.color
       this._side  = actor.side
       this._name  = actor.name
-      this._avatar = actor.avatar || null
+      this._pendingAvatar = actor.avatar || null
+      this._avatarTouched = false
     } else {
       // Pick a color not yet used
       const usedColors = new Set((p?.actors || []).map(a => a.color))
@@ -40,7 +46,7 @@ export class ActorEditorScreen {
         <div class="nav-center"><div class="nav-title">${this.isNew ? 'New Actor' : 'Edit Actor'}</div></div>
         <div style="min-width:60px;"></div>
       </div>
-      <div class="scroll-body" style="padding-bottom:32px;">
+      <div class="scroll-body" style="padding-bottom:16px;overflow-y:hidden;">
         <div class="actor-preview-zone">
           <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
             <div class="actor-preview-avatar" id="previewAvatar"
@@ -52,9 +58,9 @@ export class ActorEditorScreen {
                  style="background:var(--accent-g);">
               Preview message
             </div>
-            <div class="avatar-action-row">
-              <div class="avatar-action-btn" id="pickAvatarBtn">${icons.image} Choose avatar</div>
-              <div class="avatar-action-btn ghost" id="clearAvatarBtn">Clear</div>
+            <div class="avatar-actions">
+              <button class="avatar-action-btn" id="chooseAvatarBtn" type="button" title="Choose image">${icons.image}</button>
+              <button class="avatar-action-btn" id="clearAvatarBtn" type="button" title="Remove photo">${icons.trash}</button>
               <input id="avatarInput" type="file" accept="image/*" hidden />
             </div>
           </div>
@@ -67,8 +73,8 @@ export class ActorEditorScreen {
           </div>
         </div>
 
-        <div style="padding:14px 20px 4px;">
-          <div style="color:var(--t3);font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Color</div>
+        <div style="padding:8px 20px 0;">
+          <div style="color:var(--t3);font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px;">Color</div>
           <div class="color-picker-grid" id="colorGrid">
             ${ACTOR_COLORS.map(c => `
               <div class="color-swatch ${c === this._color ? 'active' : ''}"
@@ -76,15 +82,15 @@ export class ActorEditorScreen {
           </div>
         </div>
 
-        <div style="padding:4px 20px 0;">
-          <div style="color:var(--t3);font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px;">Conversation side</div>
+        <div style="padding:8px 20px 0;">
+          <div style="color:var(--t3);font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:4px;">Conversation side</div>
         </div>
         <div class="side-picker">
           <div class="side-opt ${this._side === 'right' ? 'active' : ''}" data-side="right">Right (you)</div>
           <div class="side-opt ${this._side === 'left'  ? 'active' : ''}" data-side="left">Left (them)</div>
         </div>
 
-        <div class="btn-primary" id="saveBtn" style="margin-top:20px;">
+        <div class="btn-primary" id="saveBtn" style="margin-top:12px;">
           ${this.isNew ? 'Add Actor' : 'Save Changes'}
         </div>
         ${canDelete ? `<div class="btn-danger" id="deleteBtn">Remove Actor</div>` : ''}
@@ -122,22 +128,25 @@ export class ActorEditorScreen {
     })
 
     this._el.querySelector('#saveBtn').addEventListener('click', () => this._save())
-    this._el.querySelector('#pickAvatarBtn').addEventListener('click', () => {
+    this._el.querySelector('#chooseAvatarBtn').addEventListener('click', () => {
       this._el.querySelector('#avatarInput')?.click()
     })
     this._el.querySelector('#clearAvatarBtn').addEventListener('click', () => {
-      this._avatar = null
+      this._pendingAvatar = null
+      this._avatarTouched = true
       this._updatePreview()
     })
     this._el.querySelector('#avatarInput').addEventListener('change', e => {
       const file = e.target.files?.[0]
       if (!file) return
       const reader = new FileReader()
-      reader.onload = () => {
-        this._avatar = String(reader.result || '')
+      reader.onload = ev => {
+        this._pendingAvatar = String(ev.target?.result || '')
+        this._avatarTouched = true
         this._updatePreview()
       }
       reader.readAsDataURL(file)
+      e.target.value = ''
     })
 
     this._el.querySelector('#deleteBtn')?.addEventListener('click', () => {
@@ -180,8 +189,8 @@ export class ActorEditorScreen {
     const sample = this._el.querySelector('#previewSample')
 
     avatar.style.background  = this._color
-    if (this._avatar) {
-      avatar.style.backgroundImage = `url('${this._avatar.replace(/'/g, '%27')}')`
+    if (this._pendingAvatar) {
+      avatar.style.backgroundImage = `url('${this._pendingAvatar.replace(/'/g, '%27')}')`
       avatar.style.backgroundSize = 'cover'
       avatar.style.backgroundPosition = 'center'
     } else {
@@ -190,7 +199,7 @@ export class ActorEditorScreen {
     }
     avatar.style.boxShadow   = `0 0 0 3px rgba(${rgb},0.3),0 8px 24px rgba(${rgb},0.25)`
     avatar.textContent        = this._name ? this._name[0].toUpperCase() : '?'
-    if (this._avatar) avatar.textContent = ''
+    if (this._pendingAvatar) avatar.textContent = ''
     name.textContent          = this._name || 'New Actor'
 
     if (this._side === 'right') {
@@ -212,9 +221,31 @@ export class ActorEditorScreen {
       return
     }
     if (this.isNew) {
-      store.addActor(this.projectId, name, this._color, this._side, this._avatar)
+      store.addActor(this.projectId, name, this._color, this._side, this._pendingAvatar)
     } else {
-      store.updateActor(this.projectId, this.actorId, { name, color: this._color, side: this._side, avatar: this._avatar })
+      const project = store.getProject(this.projectId)
+      const existing = project?.actors?.find(a => a.id === this.actorId)
+      if (!existing) return
+
+      if (this.sceneId) {
+        const globalPatch = {}
+        if (name !== existing.name) globalPatch.name = name
+        if (this._side !== existing.side) globalPatch.side = this._side
+        if (Object.keys(globalPatch).length) {
+          store.updateActor(this.projectId, this.actorId, globalPatch)
+        }
+
+        const overridePatch = {}
+        overridePatch.color = this._color === existing.color ? null : this._color
+        if (this._avatarTouched) {
+          const baseAvatar = existing.avatar || null
+          overridePatch.avatar = this._pendingAvatar === baseAvatar ? null : this._pendingAvatar
+        }
+        store.updateSceneActorOverride(this.projectId, this.sceneId, this.actorId, overridePatch)
+      } else {
+        const avatar = this._avatarTouched ? this._pendingAvatar : (existing?.avatar || null)
+        store.updateActor(this.projectId, this.actorId, { name, color: this._color, side: this._side, avatar })
+      }
     }
     pop()
   }

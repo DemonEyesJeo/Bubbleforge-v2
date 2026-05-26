@@ -12,13 +12,14 @@ export class HomeScreen {
     this._activeTab = 'projects'
     this._characterSort = 'name'
     this._searchQuery = ''
+    this._coverTimers = []
   }
 
   render() {
     const el = document.createElement('div')
     el.innerHTML = `
       <div class="status-bar">
-        ${renderStatusBar()}
+        <div id="statusBarHost">${renderStatusBar()}</div>
       </div>
       <div class="home-body" id="homeBody">
         <div class="home-header" id="homeHeader">
@@ -47,6 +48,15 @@ export class HomeScreen {
             <div class="home-pane-title">Settings</div>
             <div class="home-pane-sub">App preferences and support</div>
             <div class="home-settings-list">
+              <div class="home-setting-group-label">Appearance</div>
+              <div class="home-setting-row" id="accentColorRow">
+                <div>
+                  <div class="home-setting-title">App color</div>
+                  <div class="home-setting-sub">Change the main accent color</div>
+                </div>
+                <input type="color" id="accentColorInput" class="home-accent-input" value="${store.getAppAccent()}" />
+              </div>
+              <div class="home-setting-group-label">Support</div>
               <div class="home-setting-row">
                 <div>
                   <div class="home-setting-title">Email</div>
@@ -154,6 +164,8 @@ export class HomeScreen {
     this._closeCreditsSheet()
     this._closeProSheet()
     store.off('projects-changed', this._onChange)
+    this._coverTimers.forEach(id => clearInterval(id))
+    this._coverTimers = []
   }
 
   _openCreateProjectSheet() {
@@ -436,6 +448,24 @@ export class HomeScreen {
         this._showProjectMenu(btn.dataset.projectId)
       })
     })
+
+    this._coverTimers.forEach(id => clearInterval(id))
+    this._coverTimers = []
+    list.querySelectorAll('.project-cover-statusbars').forEach(container => {
+      const frames = container.querySelectorAll('.project-cover-sb-frame')
+      if (frames.length <= 1) return
+      let current = 0
+      const fadeLeadMs = 460
+      const id = setInterval(() => {
+        const next = (current + 1) % frames.length
+        frames[current].classList.remove('active')
+        window.setTimeout(() => {
+          current = next
+          frames[current].classList.add('active')
+        }, fadeLeadMs)
+      }, 4200)
+      this._coverTimers.push(id)
+    })
   }
 
   _refreshCharacterList() {
@@ -470,9 +500,12 @@ export class HomeScreen {
 
     list.innerHTML = rows.map(({ project, actor }) => {
       const sideLabel = actor.side === 'right' ? 'Right side' : 'Left side'
+      const avatar = actor.avatar
+        ? `<img class="home-actor-avatar-img" src="${this._escAttr(actor.avatar)}" alt="${this._escAttr(actor.name)}" />`
+        : `${actor.name[0]}`
       return `
         <div class="home-actor-row" data-project-id="${project.id}" data-actor-id="${actor.id}">
-          <div class="home-actor-avatar" style="background:${actor.color};">${actor.name[0]}</div>
+          <div class="home-actor-avatar" style="background:${actor.color};">${avatar}</div>
           <div class="home-actor-copy">
             <div class="home-actor-name">${actor.name}</div>
             <div class="home-actor-sub">${project.name} · ${sideLabel}</div>
@@ -494,6 +527,12 @@ export class HomeScreen {
   _refreshSettingsPane() {
     const body = this._el.querySelector('.home-settings-list')
     if (!body) return
+    const accentInput = body.querySelector('#accentColorInput')
+    if (accentInput) {
+      accentInput.value = store.getAppAccent()
+      accentInput.oninput = e => store.setAppAccent(e.target.value)
+    }
+
     body.querySelectorAll('.home-setting-row').forEach(row => {
       row.addEventListener('click', () => {
         const title = row.querySelector('.home-setting-title')?.textContent || ''
@@ -549,18 +588,28 @@ export class HomeScreen {
       return `<div class="project-stack-layer" style="inset:${12 + inset}px ${14 + inset}px ${22 + inset}px ${14 + inset}px;"></div>`
     }).join('')
     const pips = p.actors.slice(0, 4).map((a, i) =>
-      `<div class="actor-pip" style="background:${a.color};z-index:${10-i};">${a.name[0]}</div>`
+      `<div class="actor-pip" style="background:${a.color};z-index:${10-i};">${a.avatar ? `<img class="actor-pip-img" src="${this._escAttr(a.avatar)}" alt="${this._escAttr(a.name)}" />` : a.name[0]}</div>`
     ).join('')
 
     const totalMessages = p.scenes.reduce((n, s) => n + s.messages.length, 0)
     const edited = this._relativeTime(p.updated_at)
 
     return `
-      <div class="project-card" data-project-id="${p.id}">
-        <div class="project-cover" style="background:${this._coverGradient(colors)};">
-          <div class="project-cover-overlay"></div>
+      <div class="project-card" data-project-id="${p.id}" style="position:relative;">
+        <div class="project-cover-statusbars" data-project-id="${p.id}">
+          ${p.scenes.map((scene, i) => {
+            const sceneName = (scene?.name || '').trim() || 'Scene'
+            return `
+            <div class="project-cover-sb-frame ${i === 0 ? 'active' : ''}">
+              <div class="mini-status-phone-top">
+                <div class="status-bar mini-status-bar">
+                  <div class="mini-status-host">${renderStatusBar(scene.status_bar || {})}</div>
+                </div>
+              </div>
+              <div class="mini-status-scene-name">${this._escAttr(sceneName)}</div>
+            </div>`
+          }).join('')}
           <button class="scene-menu-btn" data-project-id="${p.id}" type="button" aria-label="Project options">···</button>
-          <div class="project-cover-stack" aria-hidden="true">${stack}</div>
         </div>
         <div class="project-info">
           <div>
@@ -669,5 +718,9 @@ export class HomeScreen {
     if (diff < 86400000)     return 'Today'
     if (diff < 172800000)    return 'Yesterday'
     return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  }
+
+  _escAttr(str) {
+    return String(str ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   }
 }

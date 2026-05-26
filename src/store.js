@@ -2,6 +2,12 @@ const STORAGE_KEY = 'bf_v2_projects'
 const LAST_PROJECT_KEY = 'bf_v2_last_project_id'
 const STATUS_TEMPLATES_KEY = 'bf_status_templates'
 const STATUS_QUICKPICKS_KEY = 'bf_status_quickpicks'
+const DIVIDER_DATE_PICKS_KEY = 'bf_divider_date_picks'
+const APP_SETTINGS_KEY = 'bf_app_settings'
+
+const DEFAULT_ACCENT = '#F6B74F'
+
+const DEFAULT_DIVIDER_DATE_PICKS = ['Today', 'Yesterday', 'Chapter 1', 'Chapter 2', 'Flashback', '3 years later', 'Meanwhile...', 'The next morning']
 
 function uuid() {
   return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)
@@ -29,6 +35,18 @@ function defaultStatusQuickpicks() {
     carrier: ['Gringotts Mobile', 'Stark Industries', 'HoloNet'],
     network: ['MAGIC', 'FLOO', 'IMPERIAL'],
     time: ['3:47 AM', '11:59 PM', '??:??'],
+  }
+}
+
+function defaultDividerStyle() {
+  return {
+    date_label: 'Today',
+    show_date: true,
+    show_name: true,
+    line_style: 'gradient',
+    line_opacity: 0.08,
+    label_color: 'muted',
+    label_case: 'upper',
   }
 }
 
@@ -61,38 +79,37 @@ function defaultRenderSettings() {
     format: 'mp4',
     preview_before_export: false,
     message_pause: 0.8,
+    script_format: 'pdf',
+    script_paper: 'a4',
+    script_style: 'screenplay',
+    script_font: 'System UI',
+    script_font_size: 14,
+    script_bold_names: true,
+    script_page_numbers: true,
+    script_paper_effect: false,
+    enter_sends: true,
+    autosave: true,
   }
 }
 
 function sampleProject() {
-  const alexId = uuid()
-  const mayaId = uuid()
   const sceneId = uuid()
   return {
     id: uuid(),
-    name: 'The Rooftop',
+    name: 'My First Story',
     created_at: now(),
     updated_at: now(),
-    actors: [
-      { id: alexId, name: 'Alex', color: '#2979FF', side: 'right', avatar: null },
-      { id: mayaId, name: 'Maya', color: '#00BFA5', side: 'left',  avatar: null },
-    ],
+    actors: [],
     groups: [],
     scenes: [
       {
         id: sceneId,
-        name: 'The Rooftop',
-        quote: 'Some things don\'t need words.',
+        name: 'Scene 1',
+        quote: '',
         status_bar: defaultStatusBar(),
         actor_overrides: {},
-        messages: [
-          { id: uuid(), actor_id: mayaId, text: 'You actually showed up.',                           ts: now() },
-          { id: uuid(), actor_id: alexId, text: 'I said I would.',                                   ts: now() + 1 },
-          { id: uuid(), actor_id: alexId, text: 'Didn\'t think you\'d be here though.',              ts: now() + 2 },
-          { id: uuid(), actor_id: alexId, text: 'Nice view.',                                        ts: now() + 3 },
-          { id: uuid(), actor_id: mayaId, text: 'It\'s the only thing left that\'s honest in this city.', ts: now() + 4 },
-          { id: uuid(), actor_id: alexId, text: 'Then maybe we stay a while.',                       ts: now() + 5 },
-        ]
+        divider_style: defaultDividerStyle(),
+        messages: []
       }
     ],
     render_settings: defaultRenderSettings(),
@@ -183,10 +200,15 @@ class Store {
 
   createProject(name = 'New Story') {
     this._snapshot()
-    const p = { ...sampleProject(), id: uuid(), name, created_at: now(), updated_at: now(), scenes: [], actors: [], groups: [] }
-    const firstScene = { id: uuid(), name: 'Scene 1', quote: '', status_bar: defaultStatusBar(), actor_overrides: {}, messages: [] }
-    p.scenes = [firstScene]
-    p.active_scene_id = firstScene.id
+    const sceneId = uuid()
+    const p = {
+      id: uuid(), name, created_at: now(), updated_at: now(),
+      actors: [],
+      groups: [],
+      scenes: [{ id: sceneId, name: 'Scene 1', quote: '', status_bar: defaultStatusBar(), actor_overrides: {}, divider_style: defaultDividerStyle(), messages: [] }],
+      render_settings: defaultRenderSettings(),
+      active_scene_id: sceneId,
+    }
     this._projects.unshift(p)
     this._save()
     this.setLastOpenedProjectId(p.id)
@@ -230,7 +252,7 @@ class Store {
     const p = this.getProject(projectId)
     if (!p) return null
     this._snapshot()
-    const s = { id: uuid(), name, quote: '', status_bar: defaultStatusBar(), actor_overrides: {}, messages: [] }
+    const s = { id: uuid(), name, quote: '', status_bar: defaultStatusBar(), actor_overrides: {}, divider_style: defaultDividerStyle(), messages: [] }
     p.scenes.push(s)
     p.updated_at = now()
     this._save()
@@ -250,6 +272,7 @@ class Store {
       id: uuid(),
       name: `${src.name} Copy`,
       actor_overrides: { ...(src.actor_overrides || {}) },
+      divider_style: { ...defaultDividerStyle(), ...(src.divider_style || {}) },
       messages: (src.messages || []).map(m => ({ ...m, id: uuid() })),
     }
     p.scenes.push(copy)
@@ -320,6 +343,43 @@ class Store {
     p.updated_at = now()
     this._save()
     this._emit('project-changed', projectId)
+  }
+
+  updateSceneDividerStyle(projectId, sceneId, patch) {
+    const p = this.getProject(projectId)
+    if (!p) return
+    const idx = p.scenes.findIndex(s => s.id === sceneId)
+    if (idx < 0) return
+    this._snapshot()
+    const current = { ...defaultDividerStyle(), ...(p.scenes[idx].divider_style || {}) }
+    p.scenes[idx] = { ...p.scenes[idx], divider_style: { ...current, ...patch } }
+    p.updated_at = now()
+    this._save()
+    this._emit('project-changed', projectId)
+  }
+
+  getDividerDatePicks() {
+    try {
+      const raw = localStorage.getItem(DIVIDER_DATE_PICKS_KEY)
+      const picks = raw ? JSON.parse(raw) : DEFAULT_DIVIDER_DATE_PICKS
+      return Array.isArray(picks) ? picks : DEFAULT_DIVIDER_DATE_PICKS
+    } catch {
+      return DEFAULT_DIVIDER_DATE_PICKS
+    }
+  }
+
+  saveDividerDatePick(value) {
+    if (!value) return
+    const picks = this.getDividerDatePicks()
+    if (picks.includes(value)) return
+    const next = [...picks, value].slice(-16)
+    try { localStorage.setItem(DIVIDER_DATE_PICKS_KEY, JSON.stringify(next)) } catch {}
+  }
+
+  removeDividerDatePick(value) {
+    const picks = this.getDividerDatePicks()
+    const next = picks.filter(p => p !== value)
+    try { localStorage.setItem(DIVIDER_DATE_PICKS_KEY, JSON.stringify(next)) } catch {}
   }
 
   updateSceneActorOverride(projectId, sceneId, actorId, patch) {
@@ -423,14 +483,35 @@ class Store {
     localStorage.setItem(STATUS_QUICKPICKS_KEY, JSON.stringify(picks))
   }
 
+  // ── App settings (accent color, etc.) ────────
+  getAppSettings() {
+    try {
+      const raw = localStorage.getItem(APP_SETTINGS_KEY)
+      return raw ? JSON.parse(raw) : {}
+    } catch { return {} }
+  }
+
+  getAppAccent() {
+    return this.getAppSettings().accent || DEFAULT_ACCENT
+  }
+
+  setAppAccent(hex) {
+    const s = this.getAppSettings()
+    s.accent = hex
+    localStorage.setItem(APP_SETTINGS_KEY, JSON.stringify(s))
+    this._emit('app-settings-changed', s)
+  }
+
   // ── Messages ─────────────────────────────────
   addMessage(projectId, sceneId, actorId, text, extras = {}) {
     const p = this.getProject(projectId)
     if (!p) return null
     const scene = p.scenes.find(s => s.id === sceneId)
     if (!scene) return null
+    const actor = p.actors.find(a => a.id === actorId)
+    const status = actor?.side === 'right' ? 'sent' : null
     this._snapshot()
-    const msg = { id: uuid(), actor_id: actorId, text: text.trim(), ts: now(), ...extras }
+    const msg = { id: uuid(), actor_id: actorId, text: text.trim(), ts: now(), reactions: [], status, ...extras }
     scene.messages.push(msg)
     p.updated_at = now()
     this._save()
@@ -448,6 +529,24 @@ class Store {
     this._snapshot()
     scene.messages[idx] = { ...scene.messages[idx], ...patch }
     p.updated_at = now()
+    this._save()
+    this._emit('project-changed', projectId)
+  }
+
+  reorderMessage(projectId, sceneId, msgId, targetMsgId) {
+    const p = this.getProject(projectId)
+    if (!p) return
+    const scene = p.scenes.find(s => s.id === sceneId)
+    if (!scene) return
+    const msgs = [...(scene.messages || [])]
+    const fromIdx = msgs.findIndex(m => m.id === msgId)
+    const toIdx = msgs.findIndex(m => m.id === targetMsgId)
+    if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return
+    this._snapshot()
+    const [moved] = msgs.splice(fromIdx, 1)
+    msgs.splice(toIdx, 0, moved)
+    scene.messages = msgs
+    p.updated_at = Date.now()
     this._save()
     this._emit('project-changed', projectId)
   }
@@ -501,15 +600,17 @@ class Store {
     this._emit('project-changed', projectId)
   }
 
-  reorderActor(projectId, actorId, direction) {
+  reorderActor(projectId, actorId, newIndex) {
     const p = this.getProject(projectId)
     if (!p) return
     const idx = p.actors.findIndex(a => a.id === actorId)
-    const newIdx = idx + direction
-    if (idx < 0 || newIdx < 0 || newIdx >= p.actors.length) return
+    if (idx < 0) return
+    const target = Math.max(0, Math.min(p.actors.length - 1, Number(newIndex)))
+    if (!Number.isFinite(target) || target === idx) return
     this._snapshot()
     const actors = [...p.actors]
-    ;[actors[idx], actors[newIdx]] = [actors[newIdx], actors[idx]]
+    const [moved] = actors.splice(idx, 1)
+    actors.splice(target, 0, moved)
     p.actors = actors
     p.updated_at = Date.now()
     this._save()

@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Status Bar Editor Mock</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #111;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  /* Phone shell */
+  .phone {
+    width: 375px;
+    height: 720px;
+    background: #080808;
+    border-radius: 44px;
+    border: 1.5px solid rgba(255,255,255,0.12);
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.8);
+  }
+
+  /* Status bar */
+  .status-bar {
+    height: 44px;
+    background: #080808;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    cursor: pointer;
+    position: relative;
+    flex-shrink: 0;
+    transition: background 0.15s;
+  }
+  .status-bar:hover { background: rgba(41,121,255,0.06); }
+  .status-bar::after {
+    content: '✎';
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 10px;
+    color: rgba(255,255,255,0.35);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .status-bar:hover::after { opacity: 1; }
+  .sb-left { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: #fff; }
+  .sb-center { font-size: 15px; font-weight: 600; color: #fff; }
+  .sb-right { display: flex; align-items: center; gap: 5px; }
+  .sb-signal { display: flex; align-items: flex-end; gap: 1.5px; }
+  .sb-signal span { background: #fff; border-radius: 1px; width: 3px; }
+  .sb-wifi svg, .sb-battery svg { fill: none; }
+
+  /* Nav bar */
+  .nav-bar {
+    height: 56px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .nav-back { color: #2979FF; font-size: 15px; display: flex; align-items: center; gap: 4px; }
+  .nav-title { flex: 1; text-align: center; }
+  .nav-title h2 { color: #fff; font-size: 17px; font-weight: 600; }
+  .nav-title p { color: rgba(255,255,255,0.4); font-size: 11px; }
+  .nav-actions { display: flex; gap: 8px; }
+  .nav-btn { width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,0.08); border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .nav-btn svg { width: 16px; height: 16px; stroke: #fff; fill: none; stroke-width: 2; stroke-linecap: round; }
+
+  /* Message area */
+  .messages {
+    flex: 1;
+    padding: 16px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+  .msg { display: flex; flex-direction: column; max-width: 70%; }
+  .msg.right { align-self: flex-end; align-items: flex-end; }
+  .msg.left { align-self: flex-start; align-items: flex-start; }
+  .bubble {
+    padding: 10px 14px;
+    border-radius: 18px;
+    font-size: 15px;
+    line-height: 1.4;
+    color: #fff;
+  }
+  .bubble.right { background: linear-gradient(135deg,#3d8bff,#2060ee); border-radius: 18px 5px 18px 18px; }
+  .bubble.left { background: rgba(41,121,255,0.12); border: 1px solid rgba(41,121,255,0.20); border-radius: 5px 18px 18px 18px; }
+  .msg-name { font-size: 11px; color: rgba(255,255,255,0.4); margin-bottom: 4px; padding: 0 4px; }
+
+  /* Bottom sheet overlay */
+  .sheet-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(4px);
+    z-index: 100;
+    display: flex;
+    align-items: flex-end;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.28s cubic-bezier(0.32,0,0.15,1);
+  }
+  .sheet-overlay.open {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  /* Bottom sheet */
+  .sheet {
+    width: 100%;
+    background: #141414;
+    border-radius: 20px 20px 0 0;
+    border-top: 1px solid rgba(255,255,255,0.10);
+    transform: translateY(100%);
+    transition: transform 0.32s cubic-bezier(0.32,0,0.15,1);
+    max-height: 82%;
+    display: flex;
+    flex-direction: column;
+  }
+  .sheet-overlay.open .sheet {
+    transform: translateY(0);
+  }
+  .sheet-handle {
+    width: 36px; height: 4px;
+    background: rgba(255,255,255,0.20);
+    border-radius: 2px;
+    margin: 10px auto 0;
+    flex-shrink: 0;
+  }
+  .sheet-header {
+    padding: 12px 16px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+  .sheet-title { color: #fff; font-size: 16px; font-weight: 600; }
+  .sheet-close {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: rgba(255,255,255,0.10);
+    border: none; color: rgba(255,255,255,0.6);
+    font-size: 14px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* Sheet content */
+  .sheet-body {
+    overflow-y: auto;
+    padding: 12px 16px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  /* Live preview inside sheet */
+  .sb-preview-shell {
+    background: #000;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.10);
+    overflow: hidden;
+  }
+  .sb-preview-bar {
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+  }
+  .preview-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(255,255,255,0.30);
+    text-align: center;
+    padding: 4px 0;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+
+  /* Zone map */
+  .zone-map {
+    display: grid;
+    grid-template-columns: 1fr 0.7fr 1fr;
+    gap: 2px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .zone {
+    padding: 8px 6px;
+    text-align: center;
+    cursor: pointer;
+    transition: background 0.15s;
+    background: #1a1a1a;
+  }
+  .zone.active { background: rgba(41,121,255,0.18); }
+  .zone-label {
+    font-size: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: rgba(255,255,255,0.35);
+    margin-bottom: 3px;
+  }
+  .zone.active .zone-label { color: #2979FF; }
+  .zone-desc { font-size: 10px; color: rgba(255,255,255,0.55); }
+  .zone.active .zone-desc { color: rgba(255,255,255,0.85); }
+
+  /* Controls */
+  .ctrl-section { display: flex; flex-direction: column; gap: 8px; }
+  .ctrl-section-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: rgba(255,255,255,0.35);
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .ctrl-input {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: #fff;
+    font-size: 14px;
+    width: 100%;
+    outline: none;
+  }
+  .ctrl-input:focus { border-color: rgba(41,121,255,0.50); }
+  .quickpicks { display: flex; gap: 6px; flex-wrap: wrap; }
+  .qp-chip {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 16px;
+    padding: 4px 10px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.70);
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+  .qp-chip:hover { background: rgba(255,255,255,0.14); color: #fff; }
+
+  /* Pill selectors */
+  .pill-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pill {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 16px;
+    padding: 5px 12px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.60);
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  .pill.active {
+    background: rgba(41,121,255,0.20);
+    border-color: rgba(41,121,255,0.50);
+    color: #fff;
+  }
+
+  /* Templates section */
+  .templates-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .templates-title { font-size: 14px; font-weight: 600; color: #fff; }
+  .templates-cats { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 4px; }
+  .tcat {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 14px;
+    padding: 4px 12px;
+    font-size: 11px;
+    color: rgba(255,255,255,0.55);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.12s;
+    flex-shrink: 0;
+  }
+  .tcat.active {
+    background: rgba(41,121,255,0.20);
+    border-color: rgba(41,121,255,0.50);
+    color: #fff;
+  }
+  .template-card {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .tcard-preview {
+    background: #000;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 14px;
+  }
+  .tcard-footer {
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .tcard-name { font-size: 13px; font-weight: 500; color: #fff; }
+  .apply-btn {
+    background: rgba(41,121,255,0.15);
+    border: 1px solid rgba(41,121,255,0.30);
+    border-radius: 8px;
+    padding: 4px 12px;
+    font-size: 12px;
+    color: #2979FF;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .apply-btn:hover { background: rgba(41,121,255,0.25); }
+
+  /* Hint bar */
+  .hint-bar {
+    position: absolute;
+    top: 44px;
+    left: 0; right: 0;
+    height: 0;
+    overflow: visible;
+    z-index: 50;
+    pointer-events: none;
+    display: flex;
+    justify-content: center;
+  }
+  .hint-pill {
+    background: rgba(41,121,255,0.90);
+    color: #fff;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 0 0 8px 8px;
+    opacity: 0;
+    transform: translateY(-100%);
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .hint-pill.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <!-- Status bar — tappable -->
+  <div class="status-bar" id="statusBar" title="Tap to edit status bar">
+    <div class="sb-left">
+      <span style="font-size:11px">T-Mobile</span>
+      <div class="sb-signal">
+        <span style="height:4px"></span>
+        <span style="height:6px"></span>
+        <span style="height:9px"></span>
+        <span style="height:12px"></span>
+      </div>
+      <span style="font-size:11px;color:rgba(255,255,255,0.7)">LTE</span>
+    </div>
+    <div class="sb-center">9:41</div>
+    <div class="sb-right">
+      <svg width="16" height="12" viewBox="0 0 16 12">
+        <path d="M8 10a1 1 0 1 0 .001 0Z" fill="#fff"/>
+        <path d="M5 7.8a4.2 4.2 0 0 1 6 0" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/>
+        <path d="M2.5 5.3a7.5 7.5 0 0 1 11 0" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/>
+      </svg>
+      <svg width="26" height="13" viewBox="0 0 26 13">
+        <rect x="0.6" y="1" width="21" height="11" rx="2.5" stroke="rgba(255,255,255,0.9)" stroke-width="1.2"/>
+        <rect x="22" y="4.5" width="2.5" height="4" rx="1" fill="rgba(255,255,255,0.5)"/>
+        <rect x="2" y="2.5" width="17" height="8" rx="1.5" fill="#fff"/>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Hint that fades in on hover -->
+  <div class="hint-bar">
+    <div class="hint-pill" id="hintPill">Tap status bar to customize</div>
+  </div>
+
+  <!-- Nav -->
+  <div class="nav-bar">
+    <div class="nav-back">
+      <svg width="8" height="13" viewBox="0 0 8 13" fill="none" stroke="#2979FF" stroke-width="2" stroke-linecap="round"><path d="M7 1L1 6.5L7 12"/></svg>
+      Stories
+    </div>
+    <div class="nav-title">
+      <h2>The Rooftop</h2>
+      <p>1 scene · 6 messages</p>
+    </div>
+    <div class="nav-actions">
+      <button class="nav-btn"><svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg></button>
+      <button class="nav-btn"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>
+      <button class="nav-btn"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
+    </div>
+  </div>
+
+  <!-- Messages -->
+  <div class="messages">
+    <div class="msg left">
+      <div class="msg-name">Alex</div>
+      <div class="bubble left">I said I would.</div>
+    </div>
+    <div class="msg right">
+      <div class="msg-name">Maya</div>
+      <div class="bubble right">Didn't think you'd be here though.</div>
+    </div>
+    <div class="msg left">
+      <div class="bubble left">Nice view.</div>
+    </div>
+    <div class="msg right">
+      <div class="bubble right">Then maybe we stay a while.</div>
+    </div>
+  </div>
+
+  <!-- Bottom sheet overlay -->
+  <div class="sheet-overlay" id="sheetOverlay">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <div class="sheet-title">Status Bar</div>
+        <button class="sheet-close" id="sheetClose">✕</button>
+      </div>
+      <div class="sheet-body">
+
+        <!-- Live preview -->
+        <div class="sb-preview-shell">
+          <div class="sb-preview-bar" id="livePreview">
+            <div class="sb-left" style="font-size:11px;font-weight:600;color:#fff;display:flex;align-items:center;gap:5px">
+              <span>T-Mobile</span>
+              <div style="display:flex;align-items:flex-end;gap:1.5px">
+                <div style="width:3px;height:4px;background:#fff;border-radius:1px"></div>
+                <div style="width:3px;height:6px;background:#fff;border-radius:1px"></div>
+                <div style="width:3px;height:9px;background:#fff;border-radius:1px"></div>
+                <div style="width:3px;height:12px;background:#fff;border-radius:1px"></div>
+              </div>
+              <span style="color:rgba(255,255,255,0.7)">LTE</span>
+            </div>
+            <div style="font-size:14px;font-weight:600;color:#fff" id="previewTime">9:41</div>
+            <div style="display:flex;align-items:center;gap:5px">
+              <svg width="14" height="11" viewBox="0 0 16 12" fill="none">
+                <path d="M8 10a1 1 0 1 0 .001 0Z" fill="#fff"/>
+                <path d="M5 7.8a4.2 4.2 0 0 1 6 0" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/>
+                <path d="M2.5 5.3a7.5 7.5 0 0 1 11 0" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/>
+              </svg>
+              <svg width="24" height="12" viewBox="0 0 26 13" fill="none">
+                <rect x="0.6" y="1" width="21" height="11" rx="2.5" stroke="rgba(255,255,255,0.9)" stroke-width="1.2"/>
+                <rect x="22" y="4.5" width="2.5" height="4" rx="1" fill="rgba(255,255,255,0.5)"/>
+                <rect x="2" y="2.5" width="17" height="8" rx="1.5" fill="#fff"/>
+              </svg>
+            </div>
+          </div>
+          <div class="preview-label">Live Preview — tap any control to update</div>
+        </div>
+
+        <!-- Zone map -->
+        <div class="zone-map">
+          <div class="zone active" data-zone="left">
+            <div class="zone-label">Left Zone</div>
+            <div class="zone-desc">Carrier · Signal</div>
+          </div>
+          <div class="zone" data-zone="center">
+            <div class="zone-label">Center</div>
+            <div class="zone-desc">Time</div>
+          </div>
+          <div class="zone" data-zone="right">
+            <div class="zone-label">Right Zone</div>
+            <div class="zone-desc">Icons · Battery</div>
+          </div>
+        </div>
+
+        <!-- Left zone controls -->
+        <div class="ctrl-section" id="ctrl-left">
+          <div class="ctrl-section-title">Carrier & Signal</div>
+          <input class="ctrl-input" placeholder="Carrier name" value="T-Mobile" id="carrierInput" />
+          <div class="quickpicks">
+            <div class="qp-chip">Gringotts Mobile</div>
+            <div class="qp-chip">HoloNet</div>
+            <div class="qp-chip">Stark Industries</div>
+          </div>
+          <input class="ctrl-input" placeholder="Network badge" value="LTE" style="margin-top:4px" />
+          <div class="quickpicks">
+            <div class="qp-chip">5G</div>
+            <div class="qp-chip">MAGIC</div>
+            <div class="qp-chip">FLOO</div>
+          </div>
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.07em;color:rgba(255,255,255,0.35);margin-top:4px">Signal</div>
+          <div class="pill-row">
+            <div class="pill active">Full</div>
+            <div class="pill">3 bar</div>
+            <div class="pill">2 bar</div>
+            <div class="pill">1 bar</div>
+            <div class="pill">None</div>
+            <div class="pill">SOS</div>
+            <div class="pill">✈ Airplane</div>
+          </div>
+        </div>
+
+        <!-- Center zone controls (hidden by default) -->
+        <div class="ctrl-section" id="ctrl-center" style="display:none">
+          <div class="ctrl-section-title">Time</div>
+          <input class="ctrl-input" placeholder="Time" value="9:41" id="timeInput" />
+          <div class="quickpicks">
+            <div class="qp-chip">3:47 AM</div>
+            <div class="qp-chip">11:59 PM</div>
+            <div class="qp-chip">??:??</div>
+          </div>
+        </div>
+
+        <!-- Right zone controls (hidden by default) -->
+        <div class="ctrl-section" id="ctrl-right" style="display:none">
+          <div class="ctrl-section-title">WiFi</div>
+          <div class="pill-row">
+            <div class="pill active">Full</div>
+            <div class="pill">Medium</div>
+            <div class="pill">Weak</div>
+            <div class="pill">Off</div>
+          </div>
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.07em;color:rgba(255,255,255,0.35);margin-top:8px">Battery</div>
+          <div class="pill-row">
+            <div class="pill active">Full</div>
+            <div class="pill">Medium</div>
+            <div class="pill" style="color:#FFD60A;border-color:rgba(255,214,10,0.3)">Low</div>
+            <div class="pill" style="color:#FF453A;border-color:rgba(255,69,58,0.3)">Critical</div>
+            <div class="pill" style="color:#FF453A;border-color:rgba(255,69,58,0.3)">Dead</div>
+          </div>
+          <div class="pill-row" style="margin-top:4px">
+            <div class="pill">⚡ Charging</div>
+            <div class="pill">🔋 Low Power</div>
+            <div class="pill">Show %</div>
+          </div>
+        </div>
+
+        <!-- Templates -->
+        <div class="ctrl-section">
+          <div class="templates-header">
+            <div class="templates-title">Templates</div>
+          </div>
+          <div class="templates-cats">
+            <div class="tcat active">All</div>
+            <div class="tcat">🌙 Night</div>
+            <div class="tcat">✈️ Travel</div>
+            <div class="tcat">💼 Work</div>
+            <div class="tcat">🎭 Drama</div>
+            <div class="tcat">🧙 Sci-Fi</div>
+            <div class="tcat">⭐ Custom</div>
+          </div>
+
+          <div class="template-card">
+            <div class="tcard-preview">
+              <div style="font-size:10px;color:rgba(255,255,255,0.5);display:flex;align-items:center;gap:4px">
+                <span>No Service</span>
+                <span style="color:#FF453A;font-weight:700;font-size:9px">SOS</span>
+              </div>
+              <div style="font-size:13px;font-weight:600;color:#fff">2:47 AM</div>
+              <div style="display:flex;align-items:center;gap:3px">
+                <span style="font-size:9px;color:rgba(255,255,255,0.5)">×</span>
+                <svg width="22" height="11" viewBox="0 0 26 13" fill="none">
+                  <rect x="0.6" y="1" width="21" height="11" rx="2.5" stroke="rgba(255,255,255,0.9)" stroke-width="1.2"/>
+                  <rect x="22" y="4.5" width="2.5" height="4" rx="1" fill="rgba(255,255,255,0.5)"/>
+                  <rect x="2" y="2.5" width="1.5" height="8" rx="1" fill="#FF453A"/>
+                </svg>
+              </div>
+            </div>
+            <div class="tcard-footer">
+              <div class="tcard-name">🌙 Late Night</div>
+              <button class="apply-btn">Apply</button>
+            </div>
+          </div>
+
+          <div class="template-card">
+            <div class="tcard-preview">
+              <div style="font-size:10px;color:rgba(255,255,255,0.5);display:flex;align-items:center;gap:4px">
+                <span>T-Mobile</span>
+                <div style="display:flex;align-items:flex-end;gap:1px">
+                  <div style="width:2px;height:3px;background:rgba(255,255,255,0.4);border-radius:1px"></div>
+                  <div style="width:2px;height:5px;background:rgba(255,255,255,0.4);border-radius:1px"></div>
+                  <div style="width:2px;height:7px;background:#fff;border-radius:1px"></div>
+                  <div style="width:2px;height:9px;background:#fff;border-radius:1px"></div>
+                </div>
+                <span style="color:rgba(255,255,255,0.6);font-size:9px">LTE</span>
+              </div>
+              <div style="font-size:13px;font-weight:600;color:#fff">9:41 AM</div>
+              <div style="display:flex;align-items:center;gap:3px">
+                <svg width="14" height="11" viewBox="0 0 16 12" fill="none">
+                  <path d="M8 10a1 1 0 1 0 .001 0Z" fill="#fff"/>
+                  <path d="M5 7.8a4.2 4.2 0 0 1 6 0" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/>
+                  <path d="M2.5 5.3a7.5 7.5 0 0 1 11 0" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/>
+                </svg>
+                <svg width="22" height="11" viewBox="0 0 26 13" fill="none">
+                  <rect x="0.6" y="1" width="21" height="11" rx="2.5" stroke="rgba(255,255,255,0.9)" stroke-width="1.2"/>
+                  <rect x="22" y="4.5" width="2.5" height="4" rx="1" fill="rgba(255,255,255,0.5)"/>
+                  <rect x="2" y="2.5" width="17" height="8" rx="1.5" fill="#30D158"/>
+                  <path d="M11 3.5 9.5 6.5h2L10 9.5" stroke="#000" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+            </div>
+            <div class="tcard-footer">
+              <div class="tcard-name">🚗 Driving</div>
+              <button class="apply-btn">Apply</button>
+            </div>
+          </div>
+
+          <div class="template-card">
+            <div class="tcard-preview">
+              <div style="font-size:10px;color:rgba(255,255,255,0.5)">✈</div>
+              <div style="font-size:13px;font-weight:600;color:#fff">11:22 PM</div>
+              <div>
+                <svg width="22" height="11" viewBox="0 0 26 13" fill="none">
+                  <rect x="0.6" y="1" width="21" height="11" rx="2.5" stroke="rgba(255,255,255,0.9)" stroke-width="1.2"/>
+                  <rect x="22" y="4.5" width="2.5" height="4" rx="1" fill="rgba(255,255,255,0.5)"/>
+                  <rect x="2" y="2.5" width="15" height="8" rx="1.5" fill="#fff"/>
+                </svg>
+              </div>
+            </div>
+            <div class="tcard-footer">
+              <div class="tcard-name">✈️ Taking Off</div>
+              <button class="apply-btn">Apply</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const statusBar = document.getElementById('statusBar')
+  const overlay = document.getElementById('sheetOverlay')
+  const closeBtn = document.getElementById('sheetClose')
+  const hintPill = document.getElementById('hintPill')
+
+  // Show hint on hover
+  statusBar.addEventListener('mouseenter', () => hintPill.classList.add('show'))
+  statusBar.addEventListener('mouseleave', () => hintPill.classList.remove('show'))
+
+  // Open sheet
+  statusBar.addEventListener('click', () => {
+    overlay.classList.add('open')
+  })
+
+  // Close sheet
+  closeBtn.addEventListener('click', () => overlay.classList.remove('open'))
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) overlay.classList.remove('open')
+  })
+
+  // Zone switching
+  document.querySelectorAll('.zone').forEach(z => {
+    z.addEventListener('click', () => {
+      document.querySelectorAll('.zone').forEach(z2 => z2.classList.remove('active'))
+      z.classList.add('active')
+      const zone = z.dataset.zone
+      document.getElementById('ctrl-left').style.display = zone === 'left' ? 'flex' : 'none'
+      document.getElementById('ctrl-center').style.display = zone === 'center' ? 'flex' : 'none'
+      document.getElementById('ctrl-right').style.display = zone === 'right' ? 'flex' : 'none'
+    })
+  })
+
+  // Pill toggles
+  document.querySelectorAll('.pill-row').forEach(row => {
+    row.querySelectorAll('.pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        row.querySelectorAll('.pill').forEach(p => p.classList.remove('active'))
+        pill.classList.add('active')
+      })
+    })
+  })
+
+  // Quick picks
+  document.querySelectorAll('.qp-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const input = chip.closest('.ctrl-section').querySelector('.ctrl-input')
+      if (input) input.value = chip.textContent
+    })
+  })
+
+  // Live time update
+  document.getElementById('timeInput')?.addEventListener('input', e => {
+    document.getElementById('previewTime').textContent = e.target.value || '9:41'
+  })
+
+  // Template cats
+  document.querySelectorAll('.tcat').forEach(cat => {
+    cat.addEventListener('click', () => {
+      document.querySelectorAll('.tcat').forEach(c => c.classList.remove('active'))
+      cat.classList.add('active')
+    })
+  })
+</script>
+</body>
+</html>
