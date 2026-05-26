@@ -61,7 +61,7 @@ export class ConversationScreen {
         <div id="statusBarHost">${renderStatusBar()}</div>
       </div>
       <div class="nav-bar">
-        <div class="nav-back" id="backBtn">${icons.back} Stories</div>
+        <div class="nav-back" id="backBtn">${icons.back} Scenes</div>
         <div class="nav-center">
           <div class="nav-title" id="sceneTitle">…</div>
         </div>
@@ -452,7 +452,7 @@ export class ConversationScreen {
     this._bubbleLongPressTimer = window.setTimeout(() => {
       this._bubbleLongPressTimer = null
       this._bubbleLongPressSuppressedMsgId = msgId
-      this._showBubbleOptions(p, scene, msgId)
+      this._showReactionPicker(scene, msgId, bub)
     }, 320)
   }
 
@@ -463,15 +463,15 @@ export class ConversationScreen {
     }
   }
 
-  _showReactionPicker(scene, msgId) {
+  _showReactionPicker(scene, msgId, anchorEl = null) {
     this._closeBubbleOptionsSheet(true)
     const message = scene.messages.find(m => m.id === msgId)
     if (!message) return
 
     const overlay = document.createElement('div')
-    overlay.className = 'sheet-overlay'
+    overlay.className = anchorEl ? 'sheet-overlay reaction-overlay' : 'sheet-overlay'
     const sheet = document.createElement('div')
-    sheet.className = 'bottom-sheet bubble-options-sheet'
+    sheet.className = anchorEl ? 'bubble-menu reaction-menu' : 'bottom-sheet bubble-options-sheet'
     const reactionsMeta = [
       { char: '😂', hex: '1F602' },
       { char: '❤️', hex: '2764' },
@@ -483,9 +483,7 @@ export class ConversationScreen {
     const reactions = Array.isArray(message.reactions)
       ? message.reactions
       : (message.reaction ? [message.reaction] : [])
-    sheet.innerHTML = `
-      <div class="bottom-sheet-handle"></div>
-      <div class="bottom-sheet-title">React</div>
+    const reactionsHtml = `
       <div class="bubble-options-react-strip">
         ${reactionsMeta.map(item => {
           const active = reactions.includes(item.char)
@@ -493,10 +491,25 @@ export class ConversationScreen {
         }).join('')}
       </div>`
 
+    sheet.innerHTML = anchorEl
+      ? `<div class="reaction-menu-label">React</div>${reactionsHtml}<button class="bubble-options-action" data-action="more" type="button" style="margin-top:8px;">More options</button>`
+      : `<div class="bottom-sheet-handle"></div><div class="bottom-sheet-title">React</div>${reactionsHtml}`
+
     this._bubbleOptionsOverlay = overlay
     this._bubbleOptionsSheet = sheet
     this._el.appendChild(overlay)
     this._el.appendChild(sheet)
+
+    if (anchorEl) {
+      const hostRect = this._el.getBoundingClientRect()
+      const bubRect = anchorEl.getBoundingClientRect()
+      const menuWidth = 254
+      const left = Math.min(Math.max(8, (bubRect.left - hostRect.left) + (bubRect.width / 2) - (menuWidth / 2)), hostRect.width - menuWidth - 8)
+      const preferTop = (bubRect.top - hostRect.top) - 96
+      const top = preferTop < 58 ? (bubRect.bottom - hostRect.top + 8) : preferTop
+      sheet.style.left = `${left}px`
+      sheet.style.top = `${top}px`
+    }
 
     const close = () => this._closeBubbleOptionsSheet()
     overlay.addEventListener('click', close)
@@ -513,6 +526,10 @@ export class ConversationScreen {
         store.updateMessage(this.projectId, scene.id, msgId, { reactions: nextReactions, reaction: null })
         close()
       })
+    })
+
+    sheet.querySelector('[data-action="more"]')?.addEventListener('click', () => {
+      this._showBubbleOptions(store.getProject(this.projectId), scene, msgId)
     })
 
     requestAnimationFrame(() => {
@@ -538,6 +555,7 @@ export class ConversationScreen {
       <div class="bottom-sheet-title">Message Options</div>
       <div class="bubble-options-list">
         <button class="bubble-options-action" data-action="react" type="button">React</button>
+        <button class="bubble-options-action" data-action="duplicate-pov" type="button">Duplicate POV</button>
         <button class="bubble-options-action" data-action="flip" type="button">Flip side</button>
         <button class="bubble-options-action" data-action="copy" type="button">Copy text</button>
         <button class="bubble-options-action danger" data-action="delete" type="button">Delete</button>
@@ -559,6 +577,10 @@ export class ConversationScreen {
 
     sheet.querySelector('[data-action="react"]')?.addEventListener('click', () => {
       this._showReactionPicker(scene, msgId)
+    })
+    sheet.querySelector('[data-action="duplicate-pov"]')?.addEventListener('click', () => {
+      this._duplicateMessageWithPov(scene, msgId)
+      close()
     })
     sheet.querySelector('[data-action="delete"]')?.addEventListener('click', () => {
       store.deleteMessage(this.projectId, scene.id, msgId)
@@ -645,6 +667,71 @@ export class ConversationScreen {
       return
     }
     store.updateMessage(this.projectId, scene.id, msgId, { actor_id: targetActor.id })
+  }
+
+  _duplicateMessageWithPov(scene, msgId) {
+    const msg = scene?.messages?.find(m => m.id === msgId)
+    const project = store.getProject(this.projectId)
+    if (!msg || !project) return
+
+    const sourceActor = project.actors.find(a => a.id === msg.actor_id)
+    const sourceSide = sourceActor?.side === 'right' ? 'right' : 'left'
+    const targetSide = sourceSide === 'right' ? 'left' : 'right'
+    const targetActor = project.actors.find(a => a.side === targetSide && a.id !== msg.actor_id)
+    if (!targetActor) {
+      this._snack('Add an actor on the other side first.')
+      return
+    }
+
+    const text = this._rewritePovText(String(msg.text || ''))
+    const extras = {}
+    if (msg.media) extras.media = msg.media
+    if (msg.audio) extras.audio = msg.audio
+    if (msg.file_name) extras.file_name = msg.file_name
+    if (msg.file_data) extras.file_data = msg.file_data
+    if (msg.timestamp_label) extras.timestamp_label = msg.timestamp_label
+
+    const inserted = store.addMessage(this.projectId, scene.id, targetActor.id, text, extras)
+    if (!inserted) return
+
+    const sourceIndex = (scene.messages || []).findIndex(item => item.id === msgId)
+    const messages = store.getScene(this.projectId, scene.id)?.messages || []
+    const afterSource = messages[sourceIndex + 1]
+    if (afterSource?.id) {
+      store.reorderMessage(this.projectId, scene.id, inserted.id, afterSource.id)
+    }
+    this._snack('POV duplicate added.')
+  }
+
+  _rewritePovText(text) {
+    if (!text) return text
+    const protectedText = text
+      .replace(/\bI'm\b/g, '__POV_IM__')
+      .replace(/\bI am\b/g, '__POV_I_AM__')
+      .replace(/\bI'll\b/g, '__POV_ILL__')
+      .replace(/\bI've\b/g, '__POV_IVE__')
+      .replace(/\bI'd\b/g, '__POV_ID__')
+
+    const rewritten = protectedText
+      .replace(/\byou're\b/gi, 'I am')
+      .replace(/\byou've\b/gi, 'I have')
+      .replace(/\byou'll\b/gi, 'I will')
+      .replace(/\byou\b/gi, 'I')
+      .replace(/\byourself\b/gi, 'myself')
+      .replace(/\byours\b/gi, 'mine')
+      .replace(/\byour\b/gi, 'my')
+      .replace(/\bmyself\b/gi, 'yourself')
+      .replace(/\bmine\b/gi, 'yours')
+      .replace(/\bmy\b/gi, 'your')
+      .replace(/\bme\b/gi, 'you')
+      .replace(/\bI\b/g, 'you')
+      .replace(/__POV_IM__/g, "you're")
+      .replace(/__POV_I_AM__/g, 'you are')
+      .replace(/__POV_ILL__/g, "you'll")
+      .replace(/__POV_IVE__/g, "you've")
+      .replace(/__POV_ID__/g, "you'd")
+
+    return rewritten
   }
 
   _send() {
