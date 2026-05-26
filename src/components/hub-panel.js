@@ -59,6 +59,17 @@ export class HubPanel {
     this._statusActiveZone = 'left'
     this._statusZoneOpen = { left: true, center: true, right: true }
     this._statusDraft = null
+    this._subTabByPrimary = {
+      actors: 'actors',
+      import: 'library',
+      script: 'format',
+      scene: 'scene',
+      status: 'left',
+      settings: 'settings',
+    }
+    this._isNarrow = false
+    this._primaryRailOpen = false
+    this._onResize = () => this._syncPrimaryRailMode()
     this._suppressProjectRender = false
     this._el = null
     this._onProjectChange = (changedProjectId) => {
@@ -88,6 +99,7 @@ export class HubPanel {
 
   dismiss() {
     store.off('project-changed', this._onProjectChange)
+    window.removeEventListener('resize', this._onResize)
     this._overlay.classList.remove('visible')
     this._panel.classList.remove('visible')
     setTimeout(() => {
@@ -107,13 +119,14 @@ export class HubPanel {
     <div class="hub-rail-btn" data-tab="import">${icons.actorImport}</div>
     <div class="hub-rail-btn" data-tab="script" title="Script Export" aria-label="Script Export">${icons.script}</div>
     <div class="hub-rail-btn" data-tab="scene">${icons.clapper}</div>
-    <div class="hub-rail-btn" data-tab="status" title="Status" aria-label="Status"><span class="hub-rail-glyph">▤</span></div>
+    <div class="hub-rail-btn" data-tab="status" title="Status" aria-label="Status">${icons.status}</div>
     <div class="hub-rail-btn" data-tab="settings">${icons.settings}</div>
     <div style="flex:1;"></div>
     <div class="hub-rail-btn" id="hubClose">${icons.close}</div>
   </div>
   <div class="hub-content">
     <div class="hub-header">
+      <button class="hub-primary-toggle" id="hubPrimaryToggle" type="button" aria-label="Open menu rail">${icons.arrowLeft}<span id="hubPrimaryToggleLabel">Menu</span></button>
       <div class="hub-header-title" id="hubTitle">Actors</div>
       <div class="hub-header-sub" id="hubSub"></div>
     </div>
@@ -125,11 +138,19 @@ export class HubPanel {
   _bind() {
     this._overlay.addEventListener('click', () => this.dismiss())
     this._panel.querySelector('#hubClose').addEventListener('click', () => this.dismiss())
+    const togglePrimaryRail = () => {
+      if (!this._isNarrow) return
+      this._primaryRailOpen = !this._primaryRailOpen
+      this._syncPrimaryRailMode()
+    }
+    this._panel.querySelector('#hubPrimaryToggle')?.addEventListener('click', togglePrimaryRail)
 
     this._panel.querySelectorAll('.hub-rail-btn[data-tab]').forEach(btn => {
       btn.addEventListener('click', () => this._setTab(btn.dataset.tab))
     })
 
+    window.addEventListener('resize', this._onResize)
+    this._syncPrimaryRailMode()
     this._setTab(this.activeTab)
   }
 
@@ -138,10 +159,89 @@ export class HubPanel {
     if (tab !== 'status') {
       this._statusDraft = null
     }
+    if (!this._subTabByPrimary[tab]) {
+      this._subTabByPrimary[tab] = this._secondaryItems(tab)[0]?.id || 'main'
+    }
+    if (this._isNarrow) {
+      this._primaryRailOpen = false
+    }
+    this._updatePrimaryToggleLabel()
+    this._syncPrimaryRailMode()
     this._panel.querySelectorAll('.hub-rail-btn[data-tab]').forEach(b => {
       b.classList.toggle('active', b.dataset.tab === tab)
     })
     this._renderTab(tab)
+  }
+
+  _syncPrimaryRailMode() {
+    if (!this._panel) return
+    this._isNarrow = false
+    this._primaryRailOpen = false
+    this._panel.classList.remove('hub-primary-collapsed')
+    this._panel.classList.remove('hub-primary-open')
+    const secondaryToggleIcon = icons.arrowRight
+    this._panel.querySelectorAll('[data-primary-rail-toggle]').forEach(btn => {
+      btn.innerHTML = secondaryToggleIcon
+      btn.title = 'Show menu'
+    })
+  }
+
+  _primaryTabLabel(tab) {
+    const labels = {
+      actors: 'Actors',
+      import: 'Import',
+      script: 'Script',
+      scene: 'Scene',
+      status: 'Status',
+      settings: 'Settings',
+    }
+    return labels[tab] || 'Menu'
+  }
+
+  _updatePrimaryToggleLabel() {
+    const label = this._panel?.querySelector('#hubPrimaryToggleLabel')
+    if (!label) return
+    label.textContent = this._primaryTabLabel(this.activeTab)
+  }
+
+  _secondaryItems(tab) {
+    if (tab === 'status') {
+      return [
+        { id: 'left', icon: icons.statusLeft, title: 'Left zone' },
+        { id: 'center', icon: icons.statusCenter, title: 'Center zone' },
+        { id: 'right', icon: icons.statusRight, title: 'Right zone' },
+        { id: 'templates', icon: icons.statusTemplates, title: 'Templates' },
+      ]
+    }
+    if (tab === 'script') {
+      return [
+        { id: 'format', icon: icons.script, title: 'Format' },
+        { id: 'style', icon: '<span class="hub-secondary-glyph">Aa</span>', title: 'Style' },
+        { id: 'export', icon: icons.export, title: 'Export' },
+      ]
+    }
+    if (tab === 'scene') return [{ id: 'scene', icon: icons.clapper, title: 'Scene' }]
+    if (tab === 'settings') return [{ id: 'settings', icon: icons.settings, title: 'Settings' }]
+    if (tab === 'import') return [{ id: 'library', icon: icons.actorImport, title: 'Import library' }]
+    return [{ id: 'actors', icon: icons.actors, title: 'Actors' }]
+  }
+
+  _withSecondaryRail(tab, contentHtml) {
+    const items = this._secondaryItems(tab)
+    const active = this._subTabByPrimary[tab] || items[0]?.id || 'main'
+    const toggleIcon = this._primaryRailOpen ? icons.arrowLeft : icons.arrowRight
+    return `
+      <div class="hub-nested-wrap">
+        <div class="hub-secondary-rail" data-secondary-rail="${tab}">
+          <button class="hub-secondary-toggle" type="button" data-primary-rail-toggle="1" title="${this._primaryRailOpen ? 'Hide menu' : 'Show menu'}">${toggleIcon}</button>
+          ${items.map(item => `
+            <button class="hub-secondary-btn ${item.id === active ? 'active' : ''}" type="button" data-secondary-id="${item.id}" title="${item.title || item.id}">
+              <span class="hub-secondary-ico">${item.icon}</span>
+            </button>
+          `).join('')}
+        </div>
+        <div class="hub-secondary-pane" id="hubSecondaryPane">${contentHtml}</div>
+      </div>`
   }
 
   _renderTab(tab) {
@@ -189,7 +289,7 @@ export class HubPanel {
     } else if (tab === 'import') {
       title.textContent = 'Import Actors'
       sub.textContent = 'Reuse actors from other stories'
-      body.innerHTML = this._importActorsTab(p)
+      body.innerHTML = this._withSecondaryRail(tab, this._importActorsTab(p))
       body.querySelectorAll('[data-import-project]').forEach(btn => {
         btn.addEventListener('click', () => {
           const projectId = btn.dataset.importProject || ''
@@ -211,26 +311,47 @@ export class HubPanel {
     } else if (tab === 'scene') {
       title.textContent = 'Scene Editor'
       sub.textContent = scene?.name || ''
-      body.innerHTML = this._sceneTab(p, scene)
+      body.innerHTML = this._withSecondaryRail(tab, this._sceneTab(p, scene))
       this._bindSceneTab(body, p, scene)
     } else if (tab === 'script') {
       title.textContent = 'Script Export'
       sub.textContent = 'Layout and export settings'
-      body.innerHTML = this._scriptTab(p)
-      this._bindScriptSubTabs(body)
+      const active = this._subTabByPrimary.script || 'format'
+      body.innerHTML = this._withSecondaryRail(tab, this._scriptTab(p, active))
       this._bindRenderSettingsControls(body)
       body.querySelector('#scriptExportBtn')?.addEventListener('click', () => this._exportScriptProject())
     } else if (tab === 'status') {
       title.textContent = 'Status'
       sub.textContent = scene?.name || ''
-      body.innerHTML = this._statusTab(p, scene)
+      const active = this._subTabByPrimary.status || 'left'
+      this._statusActiveZone = active
+      body.innerHTML = this._withSecondaryRail(tab, this._statusTab(p, scene))
       this._bindStatusTab(body, scene)
     } else if (tab === 'settings') {
       title.textContent = 'Story Settings'
       sub.textContent = p.name
-      body.innerHTML = this._settingsTab(p)
+      body.innerHTML = this._withSecondaryRail(tab, this._settingsTab(p))
       this._bindRenderSettingsControls(body)
     }
+
+    body.querySelectorAll('.hub-secondary-btn[data-secondary-id]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.secondaryId || ''
+        if (!id) return
+        this._subTabByPrimary[tab] = id
+        this._renderTab(tab)
+        const pane = this._panel?.querySelector('#hubSecondaryPane')
+        if (pane) pane.scrollTop = 0
+      })
+    })
+
+    body.querySelectorAll('[data-primary-rail-toggle]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (!this._isNarrow) return
+        this._primaryRailOpen = !this._primaryRailOpen
+        this._syncPrimaryRailMode()
+      })
+    })
   }
 
   _actorsTab(p) {
@@ -451,92 +572,75 @@ export class HubPanel {
     const userTemplates = store.getStatusTemplates()
     const selectedCategory = this._statusTemplateCategory || 'all'
     const isAirplane = status.signal === 'airplane'
+    const segment = ['left', 'center', 'right', 'templates'].includes(this._statusActiveZone) ? this._statusActiveZone : 'left'
     const visibleBuiltins = builtins.filter(row => selectedCategory === 'all' || BUILTIN_TEMPLATE_CATEGORIES[row.id] === selectedCategory)
     const visibleUsers = selectedCategory === 'custom' || selectedCategory === 'all' ? userTemplates : []
 
-    return `
-      <div class="status-tab-wrap">
-        <div class="sb-zone-map">
-          <button class="sb-zone ${this._statusActiveZone === 'left' ? 'active' : ''}" type="button" data-sb-zone="left">
-            <div class="sb-zone-label">Left Zone</div>
-            <div class="sb-zone-desc">${isAirplane ? '✈ Airplane' : 'Carrier · Signal'}</div>
-          </button>
-          <button class="sb-zone ${this._statusActiveZone === 'center' ? 'active' : ''}" type="button" data-sb-zone="center">
-            <div class="sb-zone-label">Center</div>
-            <div class="sb-zone-desc">Time</div>
-          </button>
-          <button class="sb-zone ${this._statusActiveZone === 'right' ? 'active' : ''}" type="button" data-sb-zone="right">
-            <div class="sb-zone-label">Right Zone</div>
-            <div class="sb-zone-desc">Icons · Batt</div>
-          </button>
-        </div>
+    let segmentBody = ''
+    if (segment === 'left') {
+      segmentBody = `
+        <div class="status-segment-panel">
+          <div class="form-field ${isAirplane ? 'disabled' : ''}">
+            <label>Carrier</label>
+            <input id="statusCarrierInput" type="text" value="${status.carrier || ''}" placeholder="Verizon" ${isAirplane ? 'disabled' : ''} />
+            <div class="status-quick-row">${this._quickpickHTML('carrier', quick.carrier || [], isAirplane)}<button class="status-save-qp" data-quickpick-save="carrier" type="button" ${isAirplane ? 'disabled' : ''}>+ Save</button></div>
+          </div>
 
-        <div class="status-zone-sections">
-          <section class="status-zone-section ${this._statusZoneOpen.left ? 'open' : ''}" id="sbZoneLeftSection">
-            <button class="status-zone-head" type="button" data-sb-collapse="left">LEFT ZONE - Carrier & Signal <span>${this._statusZoneOpen.left ? '▾' : '▸'}</span></button>
-            <div class="status-zone-body">
-              <div class="form-field ${isAirplane ? 'disabled' : ''}">
-                <label>Carrier</label>
-                <input id="statusCarrierInput" type="text" value="${status.carrier || ''}" placeholder="Verizon" ${isAirplane ? 'disabled' : ''} />
-                <div class="status-quick-row">${this._quickpickHTML('carrier', quick.carrier || [], isAirplane)}<button class="status-save-qp" data-quickpick-save="carrier" type="button" ${isAirplane ? 'disabled' : ''}>+ Save</button></div>
-              </div>
+          <div class="form-field ${isAirplane ? 'disabled' : ''}">
+            <label>Network</label>
+            <input id="statusNetworkInput" type="text" value="${status.network || ''}" placeholder="LTE" ${isAirplane ? 'disabled' : ''} />
+            <div class="status-quick-row">${this._quickpickHTML('network', quick.network || [], isAirplane)}<button class="status-save-qp" data-quickpick-save="network" type="button" ${isAirplane ? 'disabled' : ''}>+ Save</button></div>
+          </div>
 
-              <div class="form-field ${isAirplane ? 'disabled' : ''}">
-                <label>Network</label>
-                <input id="statusNetworkInput" type="text" value="${status.network || ''}" placeholder="LTE" ${isAirplane ? 'disabled' : ''} />
-                <div class="status-quick-row">${this._quickpickHTML('network', quick.network || [], isAirplane)}<button class="status-save-qp" data-quickpick-save="network" type="button" ${isAirplane ? 'disabled' : ''}>+ Save</button></div>
-              </div>
+          <div class="form-field">
+            <label>Signal</label>
+            <div class="status-pill-row">${this._pillRow('signal', ['full', '3bar', '2bar', '1bar', 'none', 'sos', 'airplane'], status.signal)}</div>
+          </div>
+        </div>`
+    } else if (segment === 'center') {
+      segmentBody = `
+        <div class="status-segment-panel">
+          <div class="form-field">
+            <label>Time</label>
+            <input id="statusTimeInput" type="text" value="${status.time || ''}" placeholder="9:41" />
+            <div class="status-quick-row">${this._quickpickHTML('time', quick.time || [])}<button class="status-save-qp" data-quickpick-save="time" type="button">+ Save</button></div>
+          </div>
+        </div>`
+    } else if (segment === 'right') {
+      segmentBody = `
+        <div class="status-segment-panel">
+          <div class="form-field ${isAirplane ? 'disabled' : ''}">
+            <label>WiFi</label>
+            <div class="status-pill-row">${this._pillRow('wifi', ['full', 'medium', 'weak', 'off'], status.wifi, isAirplane)}</div>
+          </div>
 
-              <div class="form-field">
-                <label>Signal</label>
-                <div class="status-pill-row">${this._pillRow('signal', ['full', '3bar', '2bar', '1bar', 'none', 'sos', 'airplane'], status.signal)}</div>
-              </div>
+          <div class="form-field">
+            <label>Battery</label>
+            <div class="status-pill-row">${this._pillRow('battery', ['full', 'medium', 'low', 'critical', 'dead'], status.battery)}</div>
+            <div class="status-toggle-row">
+              ${this._boolChip('charging', '⚡ Charging', status.charging)}
+              ${this._boolChip('low_power', 'Low power', status.low_power)}
+              ${this._boolChip('show_percent', 'Show %', status.show_percent)}
             </div>
-          </section>
+          </div>
 
-          <section class="status-zone-section ${this._statusZoneOpen.center ? 'open' : ''}" id="sbZoneCenterSection">
-            <button class="status-zone-head" type="button" data-sb-collapse="center">CENTER - Time <span>${this._statusZoneOpen.center ? '▾' : '▸'}</span></button>
-            <div class="status-zone-body">
-              <div class="form-field">
-                <label>Time</label>
-                <input id="statusTimeInput" type="text" value="${status.time || ''}" placeholder="9:41" />
-                <div class="status-quick-row">${this._quickpickHTML('time', quick.time || [])}<button class="status-save-qp" data-quickpick-save="time" type="button">+ Save</button></div>
-              </div>
-            </div>
-          </section>
-
-          <section class="status-zone-section ${this._statusZoneOpen.right ? 'open' : ''}" id="sbZoneRightSection">
-            <button class="status-zone-head" type="button" data-sb-collapse="right">RIGHT ZONE - Status & Battery <span>${this._statusZoneOpen.right ? '▾' : '▸'}</span></button>
-            <div class="status-zone-body">
-              <div class="form-field ${isAirplane ? 'disabled' : ''}">
-                <label>WiFi</label>
-                <div class="status-pill-row">${this._pillRow('wifi', ['full', 'medium', 'weak', 'off'], status.wifi, isAirplane)}</div>
-              </div>
-
-              <div class="form-field">
-                <label>Battery</label>
-                <div class="status-pill-row">${this._pillRow('battery', ['full', 'medium', 'low', 'critical', 'dead'], status.battery)}</div>
-                <div class="status-toggle-row">
-                  ${this._boolChip('charging', '⚡ Charging', status.charging)}
-                  ${this._boolChip('low_power', 'Low power', status.low_power)}
-                  ${this._boolChip('show_percent', 'Show %', status.show_percent)}
-                </div>
-              </div>
-
-              <div class="form-field">
-                <label>Status Icons</label>
-                ${Object.entries(STATUS_ICON_GROUPS).map(([group, keys]) => `
-                  <div class="status-icon-group">
-                    <div class="status-icon-group-title">${group}</div>
-                    <div class="status-icon-grid">${keys.map(key => this._iconChip(key, status.icons || [])).join('')}</div>
-                  </div>`).join('')}
-              </div>
-            </div>
-          </section>
-        </div>
-
+          <div class="form-field">
+            <label>Status Icons</label>
+            ${Object.entries(STATUS_ICON_GROUPS).map(([group, keys]) => `
+              <div class="status-icon-group">
+                <div class="status-icon-group-title">${group}</div>
+                <div class="status-icon-grid">${keys.map(key => this._iconChip(key, status.icons || [])).join('')}</div>
+              </div>`).join('')}
+          </div>
+        </div>`
+    } else {
+      segmentBody = `
         <div class="status-templates-inline">
           <div class="status-templates-head">Templates</div>
+          <div class="status-template-toolbar">
+            <button class="status-template-save-current" type="button" id="statusTemplateSaveCurrent">Save current</button>
+            <button class="status-template-save-current" type="button" id="statusTemplateImport">Import code</button>
+          </div>
           <div class="status-template-filters">
             ${[
               ['all', 'All'],
@@ -551,10 +655,17 @@ export class HubPanel {
           <div class="status-template-inline-list">
             ${visibleBuiltins.map(row => this._statusTemplateCard(row, false)).join('')}
             ${visibleUsers.map(row => this._statusTemplateCard(row, true)).join('')}
-            ${selectedCategory === 'custom' && !visibleUsers.length ? '<div class="status-template-empty">No saved templates yet.</div><button class="status-template-save-current" type="button" id="statusTemplateSaveCurrentEmpty">+ Save current</button>' : ''}
+            ${selectedCategory === 'custom' && !visibleUsers.length ? '<div class="status-template-empty">No saved templates yet.</div>' : ''}
           </div>
-          ${selectedCategory === 'custom' ? '' : '<button class="status-template-save-current" type="button" id="statusTemplateSaveCurrent">+ Save current as template</button>'}
+        </div>`
+    }
+
+    return `
+      <div class="status-tab-wrap">
+        <div class="status-preview-card">
+          ${renderStatusBar(status)}
         </div>
+        ${segmentBody}
       </div>`
   }
 
@@ -577,34 +688,6 @@ export class HubPanel {
     body.querySelector('#statusTimeInput')?.addEventListener('input', (e) => updateStatus({ time: e.target.value }))
     body.querySelector('#statusCarrierInput')?.addEventListener('input', (e) => updateStatus({ carrier: e.target.value }))
     body.querySelector('#statusNetworkInput')?.addEventListener('input', (e) => updateStatus({ network: e.target.value }))
-
-    body.querySelectorAll('[data-sb-zone]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const zone = btn.dataset.sbZone || 'left'
-        this._statusActiveZone = zone
-        body.querySelectorAll('[data-sb-zone]').forEach(node => node.classList.toggle('active', node.dataset.sbZone === zone))
-        const sectionMap = {
-          left: '#sbZoneLeftSection',
-          center: '#sbZoneCenterSection',
-          right: '#sbZoneRightSection',
-        }
-        const target = body.querySelector(sectionMap[zone])
-        if (target) {
-          this._statusZoneOpen[zone] = true
-          target.classList.add('open')
-          target.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        }
-      })
-    })
-
-    body.querySelectorAll('[data-sb-collapse]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const zone = btn.dataset.sbCollapse
-        if (!zone) return
-        this._statusZoneOpen[zone] = !this._statusZoneOpen[zone]
-        refreshStatusTab()
-      })
-    })
 
     body.querySelectorAll('[data-status-field][data-status-value]').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -707,6 +790,50 @@ export class HubPanel {
         refreshStatusTab()
       })
     })
+
+    body.querySelectorAll('[data-template-share]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const templateId = btn.dataset.templateShare
+        if (!templateId) return
+        const tpl = store.getStatusTemplates().find(t => t.id === templateId)
+        if (!tpl) return
+        const payload = {
+          name: tpl.name,
+          emoji: tpl.emoji,
+          status_bar: this._normalizeStatusSettings(tpl.status_bar || {}),
+        }
+        const code = `bf1:${btoa(JSON.stringify(payload))}`
+        try {
+          await navigator.clipboard.writeText(code)
+          this._snack('Template copied - share it anywhere')
+        } catch {
+          window.prompt('Copy this template code', code)
+        }
+      })
+    })
+
+    body.querySelector('#statusTemplateImport')?.addEventListener('click', () => {
+      const code = window.prompt('Paste template code (bf1:...)', '')?.trim()
+      if (!code) return
+      if (!code.startsWith('bf1:')) {
+        this._snack('Invalid template code.')
+        return
+      }
+      try {
+        const raw = code.slice(4)
+        const parsed = JSON.parse(atob(raw))
+        const name = String(parsed?.name || 'Imported template').trim() || 'Imported template'
+        const emoji = String(parsed?.emoji || '⭐').trim() || '⭐'
+        const statusBar = this._normalizeStatusSettings(parsed?.status_bar || {})
+        store.saveStatusTemplate({ name, emoji, status_bar: statusBar })
+        this._statusTemplateCategory = 'custom'
+        this._statusActiveZone = 'templates'
+        this._snack('Template imported.')
+        refreshStatusTab()
+      } catch {
+        this._snack('Could not import template.')
+      }
+    })
   }
 
   _currentSbSettings() {
@@ -734,6 +861,7 @@ export class HubPanel {
         <div class="status-template-preview">${renderStatusBar(template.status_bar)}</div>
         <div class="status-template-actions">
           <button type="button" data-template-apply="${template.id}">Apply</button>
+          ${isCustom ? `<button type="button" data-template-share="${template.id}">Share</button>` : ''}
           ${isCustom ? `<button type="button" data-template-delete="${template.id}">Delete</button>` : ''}
         </div>
       </div>`
@@ -770,23 +898,11 @@ export class HubPanel {
     }, 2200)
   }
 
-  _scriptTab(p) {
+  _scriptTab(p, sub = 'format') {
     const rs = p.render_settings || {}
-    return `
-      <div class="hub-tab-scroll" style="display:flex;flex-direction:column;gap:0;">
-        <div class="hub-sub-rail">
-          <button class="hub-sub-btn active" data-sub="format">Format</button>
-          <button class="hub-sub-btn" data-sub="style">Style</button>
-          <button class="hub-sub-btn" data-sub="export">Export</button>
-        </div>
-
-        <div class="hub-config-stack hub-sub-page active" data-sub-page="format">
-          ${this._settingsSection('Output', this._settingsPills('script_format', ['PDF', 'PNG', 'JPG', 'WEBP'], (rs.script_format || 'pdf').toUpperCase()))}
-          ${this._settingsSection('Paper', this._settingsPills('script_paper', ['A4', 'US Letter'], (rs.script_paper || 'a4') === 'letter' ? 'US Letter' : 'A4'))}
-          ${this._settingsRange('Font Size', 'script_font_size', 10, 21, 1, rs.script_font_size || 14, value => `${value}pt`)}
-        </div>
-
-        <div class="hub-config-stack hub-sub-page" data-sub-page="style">
+    if (sub === 'style') {
+      return `
+        <div class="hub-config-stack">
           ${this._settingsSection('Layout', this._settingsPills('script_style', ['Screenplay', 'Reduced', 'Condensed'], this._titleCase(rs.script_style || 'screenplay')))}
           ${this._settingsSection('Font', this._settingsPills('script_font', SCRIPT_FONT_OPTIONS, rs.script_font || 'System UI'))}
           <div class="hub-note">No bundled font files were found in this v2 project, so Script export currently uses System UI.</div>
@@ -795,24 +911,21 @@ export class HubPanel {
             ${this._settingsToggle('Page numbers', 'script_page_numbers', rs.script_page_numbers !== false)}
             ${this._settingsToggle('Paper texture effect', 'script_paper_effect', rs.script_paper_effect === true)}
           `)}
-        </div>
-
-        <div class="hub-config-stack hub-sub-page" data-sub-page="export">
+        </div>`
+    }
+    if (sub === 'export') {
+      return `
+        <div class="hub-config-stack">
           <button class="hub-action-primary" id="scriptExportBtn" type="button">Export Script</button>
           <div class="hub-note" style="text-align:center;">Exports a formatted screenplay-style PDF (or image) of this story's messages.</div>
-        </div>
+        </div>`
+    }
+    return `
+      <div class="hub-config-stack">
+        ${this._settingsSection('Output', this._settingsPills('script_format', ['PDF', 'PNG', 'JPG', 'WEBP'], (rs.script_format || 'pdf').toUpperCase()))}
+        ${this._settingsSection('Paper', this._settingsPills('script_paper', ['A4', 'US Letter'], (rs.script_paper || 'a4') === 'letter' ? 'US Letter' : 'A4'))}
+        ${this._settingsRange('Font Size', 'script_font_size', 10, 21, 1, rs.script_font_size || 14, value => `${value}pt`)}
       </div>`
-  }
-
-  _bindScriptSubTabs(body) {
-    body.querySelectorAll('.hub-sub-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        body.querySelectorAll('.hub-sub-btn').forEach(b => b.classList.remove('active'))
-        body.querySelectorAll('.hub-sub-page').forEach(p => p.classList.remove('active'))
-        btn.classList.add('active')
-        body.querySelector(`[data-sub-page="${btn.dataset.sub}"]`)?.classList.add('active')
-      })
-    })
   }
 
   _settingsTab(p) {
@@ -896,20 +1009,24 @@ export class HubPanel {
   _exportScriptProject() {
     const project = store.getProject(this.projectId)
     if (!project) return
+    const scriptFormat = String(project.render_settings?.script_format || 'pdf').toLowerCase()
+    const backendFormat = ({ pdf: 'script_pdf', png: 'script_png', jpg: 'script_jpg', webp: 'script_webp' }[scriptFormat] || 'script_pdf')
+    const formatFallback = ({ pdf: 'pdf', png: 'png', jpg: 'jpg', webp: 'webp' }[scriptFormat] || 'pdf')
     const nextProject = {
       ...project,
       render_settings: {
         ...(project.render_settings || {}),
+        format: formatFallback,
       },
     }
     fetch('/api/export', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ project: nextProject, format: 'script_pdf' }),
+      body: JSON.stringify({ project: nextProject, format: backendFormat }),
     }).then(async (resp) => {
       const data = await resp.json().catch(() => ({}))
       if (!resp.ok) throw new Error(data?.error || 'Failed to start script export')
-      this._snack('Script export started')
+      this._snack(`Script ${scriptFormat.toUpperCase()} export started`)
     }).catch((err) => {
       this._snack(err?.message || 'Script export requires the backend server')
     })

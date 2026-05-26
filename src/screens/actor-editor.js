@@ -42,7 +42,7 @@ export class ActorEditorScreen {
     el.innerHTML = `
       <div class="status-bar"><div id="statusBarHost">${renderStatusBar()}</div></div>
       <div class="nav-bar">
-        <div class="nav-back" id="backBtn">${icons.back} Back</div>
+        <div class="nav-back" id="backBtn">${icons.back} ${this.sceneId ? 'Scenes' : 'Back'}</div>
         <div class="nav-center"><div class="nav-title">${this.isNew ? 'New Actor' : 'Edit Actor'}</div></div>
         <div style="min-width:60px;"></div>
       </div>

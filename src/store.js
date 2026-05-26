@@ -225,6 +225,62 @@ class Store {
     this._emit('project-changed', id)
   }
 
+  duplicateProject(projectId) {
+    const src = this.getProject(projectId)
+    if (!src) return null
+
+    this._snapshot()
+
+    const actorIdMap = new Map()
+    const sceneIdMap = new Map()
+    const actors = (src.actors || []).map(actor => {
+      const nextId = uuid()
+      actorIdMap.set(actor.id, nextId)
+      return { ...actor, id: nextId }
+    })
+
+    const scenes = (src.scenes || []).map(scene => {
+      const nextSceneId = uuid()
+      sceneIdMap.set(scene.id, nextSceneId)
+      const overrides = scene.actor_overrides || {}
+      const remappedOverrides = Object.fromEntries(
+        Object.entries(overrides).map(([actorId, patch]) => [actorIdMap.get(actorId) || actorId, { ...(patch || {}) }])
+      )
+      return {
+        ...scene,
+        id: nextSceneId,
+        actor_overrides: remappedOverrides,
+        divider_style: { ...defaultDividerStyle(), ...(scene.divider_style || {}) },
+        status_bar: { ...defaultStatusBar(), ...(scene.status_bar || {}) },
+        messages: (scene.messages || []).map(msg => ({
+          ...msg,
+          id: uuid(),
+          actor_id: actorIdMap.get(msg.actor_id) || msg.actor_id,
+          reactions: Array.isArray(msg.reactions) ? [...msg.reactions] : [],
+        })),
+      }
+    })
+
+    const duplicated = {
+      ...src,
+      id: uuid(),
+      name: `Copy of ${src.name || 'Story'}`,
+      created_at: now(),
+      updated_at: now(),
+      actors,
+      groups: (src.groups || []).map(group => ({ ...group, id: uuid() })),
+      scenes,
+      render_settings: { ...defaultRenderSettings(), ...(src.render_settings || {}) },
+      active_scene_id: sceneIdMap.get(src.active_scene_id) || scenes[0]?.id || null,
+    }
+
+    this._projects.unshift(duplicated)
+    this._save()
+    this.setLastOpenedProjectId(duplicated.id)
+    this._emit('projects-changed')
+    return duplicated
+  }
+
   deleteProject(id) {
     this._snapshot()
     this._projects = this._projects.filter(p => p.id !== id)

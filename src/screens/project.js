@@ -20,16 +20,16 @@ export class ProjectScreen {
         <div id="statusBarHost">${renderStatusBar()}</div>
       </div>
       <div class="nav-bar">
-        <div class="nav-back" id="projectBackBtn">${icons.back} Stories</div>
+        <div class="nav-back" id="projectBackBtn">${icons.back} Projects</div>
         <div class="nav-center">
           <div class="nav-title" id="projectNavTitle">Project</div>
           <div class="nav-sub" id="projectNavSub"></div>
         </div>
-        <div style="width:72px;"></div>
+        <div class="nav-btn" id="projectMenuBtn" title="Project menu">${icons.dots}</div>
       </div>
       <div class="project-body">
         <div class="project-actions">
-          <button class="project-action-card primary" id="projectConversationBtn" type="button">
+          <button class="project-action-card" id="projectConversationBtn" type="button">
             <div class="project-action-icon">${icons.bubbleChat}</div>
             <div class="project-action-title">Conversation</div>
           </button>
@@ -53,6 +53,7 @@ export class ProjectScreen {
   bind() {
     store.setLastOpenedProjectId(this.projectId)
     this._el.querySelector('#projectBackBtn')?.addEventListener('click', () => pop())
+    this._el.querySelector('#projectMenuBtn')?.addEventListener('click', () => this._showProjectMenu())
     this._el.querySelector('#projectConversationBtn')?.addEventListener('click', () => {
       this._createBlankScene('conversation')
     })
@@ -69,9 +70,180 @@ export class ProjectScreen {
   }
 
   destroy() {
+    this._closeProjectMenu()
     this._closeSceneMenu()
     store.off('project-changed', this._onProjectChange)
     store.off('projects-changed', this._onProjectsChange)
+  }
+
+  _showProjectMenu() {
+    if (this._projectMenuOverlay || this._projectMenuSheet) return
+
+    const project = store.getProject(this.projectId)
+    if (!project) return
+
+    const host = document.getElementById('overlay-layer') || this._el
+    const wrap = document.createElement('div')
+    wrap.innerHTML = `
+      <div class="hub-overlay"></div>
+      <div class="hub-panel">
+        <div class="hub-rail">
+          <div class="hub-rail-btn active" data-project-menu-tab="rename" title="Rename">${icons.edit}</div>
+          <div class="hub-rail-btn" data-project-menu-tab="duplicate" title="Duplicate">${icons.duplicate}</div>
+          <div class="hub-rail-btn" data-project-menu-tab="delete" title="Delete">${icons.trash}</div>
+          <div style="flex:1;"></div>
+          <div class="hub-rail-btn" id="projectMenuCloseBtn">${icons.close}</div>
+        </div>
+        <div class="hub-content">
+          <div class="hub-header">
+            <div class="hub-header-title" id="projectMenuTitle"></div>
+            <div class="hub-header-sub" id="projectMenuSub"></div>
+          </div>
+          <div class="hub-body" id="projectMenuBody"></div>
+        </div>
+      </div>
+    `
+
+    const overlay = wrap.children[0]
+    const panel = wrap.children[1]
+    this._projectMenuOverlay = overlay
+    this._projectMenuSheet = panel
+    this._projectMenuTab = 'rename'
+    this._projectDeleteArmed = false
+    this._projectMenuHost = host
+
+    host.appendChild(overlay)
+    host.appendChild(panel)
+    if (host.id === 'overlay-layer') {
+      host.style.pointerEvents = 'all'
+    }
+
+    overlay.addEventListener('click', () => this._closeProjectMenu())
+    panel.querySelector('#projectMenuCloseBtn')?.addEventListener('click', () => this._closeProjectMenu())
+    panel.querySelectorAll('[data-project-menu-tab]').forEach(btn => {
+      btn.addEventListener('click', () => this._setProjectMenuTab(btn.dataset.projectMenuTab || 'rename'))
+    })
+
+    this._setProjectMenuTab('rename')
+    requestAnimationFrame(() => {
+      overlay.classList.add('visible')
+      panel.classList.add('visible')
+    })
+  }
+
+  _closeProjectMenu() {
+    if (!this._projectMenuOverlay || !this._projectMenuSheet) return
+    const overlay = this._projectMenuOverlay
+    const panel = this._projectMenuSheet
+    const host = this._projectMenuHost
+    overlay.classList.remove('visible')
+    panel.classList.remove('visible')
+    this._projectMenuOverlay = null
+    this._projectMenuSheet = null
+    this._projectMenuTab = null
+    this._projectDeleteArmed = false
+    this._projectMenuHost = null
+    setTimeout(() => {
+      overlay.remove()
+      panel.remove()
+      if (host?.id === 'overlay-layer') {
+        host.style.pointerEvents = 'none'
+      }
+    }, 320)
+  }
+
+  _setProjectMenuTab(tab) {
+    if (!this._projectMenuSheet) return
+    const project = store.getProject(this.projectId)
+    if (!project) return
+
+    this._projectMenuTab = tab
+    if (tab !== 'delete') {
+      this._projectDeleteArmed = false
+    }
+    this._projectMenuSheet.querySelectorAll('[data-project-menu-tab]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.projectMenuTab === tab)
+    })
+
+    const title = this._projectMenuSheet.querySelector('#projectMenuTitle')
+    const sub = this._projectMenuSheet.querySelector('#projectMenuSub')
+    const body = this._projectMenuSheet.querySelector('#projectMenuBody')
+    if (!title || !sub || !body) return
+
+    if (tab === 'rename') {
+      title.textContent = 'Rename Project'
+      sub.textContent = project.name || 'Project'
+      body.innerHTML = `
+        <div class="hub-config-stack">
+          <div class="hub-settings-card">
+            <div class="form-field" style="margin:0;">
+              <label>Project name</label>
+              <input id="projectRenameInput" type="text" value="${this._esc(project.name)}" maxlength="80" />
+            </div>
+            <button class="new-project-btn primary" id="projectRenameSave" style="margin-top:10px; width:100%;">Save</button>
+          </div>
+        </div>`
+      body.querySelector('#projectRenameSave')?.addEventListener('click', () => {
+        const next = body.querySelector('#projectRenameInput')?.value.trim() || ''
+        if (!next) return this._snack('Project name cannot be empty.')
+        store.updateProject(this.projectId, { name: next })
+        this._snack('Project renamed')
+        this._closeProjectMenu()
+      })
+      return
+    }
+
+    if (tab === 'duplicate') {
+      title.textContent = 'Duplicate Project'
+      sub.textContent = `${project.scenes?.length || 0} scenes`
+      body.innerHTML = `
+        <div class="hub-config-stack">
+          <div class="hub-settings-card">
+            <div class="hub-list-title">Create a full copy</div>
+            <div class="hub-list-sub" style="margin-top:6px;">Duplicates scenes, actors, messages, and settings.</div>
+            <button class="new-project-btn primary" id="projectDuplicateRun" style="margin-top:12px; width:100%;">Duplicate</button>
+            <button class="new-project-btn ghost" id="projectDuplicatePovRun" style="margin-top:10px; width:100%; display:flex; align-items:center; justify-content:center; gap:8px;">${icons.duplicate} Duplicate POV</button>
+          </div>
+        </div>`
+      body.querySelector('#projectDuplicateRun')?.addEventListener('click', () => {
+        const copy = store.duplicateProject(this.projectId)
+        if (!copy) return
+        this._snack('Project duplicated')
+        this._closeProjectMenu()
+      })
+      body.querySelector('#projectDuplicatePovRun')?.addEventListener('click', () => {
+        const activeScene = store.getActiveScene(this.projectId) || project.scenes?.[0]
+        if (!activeScene?.id) return
+        this._closeProjectMenu()
+        push('conversation', { projectId: this.projectId, sceneId: activeScene.id })
+      })
+      return
+    }
+
+    title.textContent = 'Delete Project'
+    sub.textContent = project.name || 'Project'
+    const armed = this._projectDeleteArmed === true
+    body.innerHTML = `
+      <div class="hub-config-stack">
+        <div class="hub-settings-card">
+          <div class="danger-zone-title">DANGER ZONE</div>
+          <div class="hub-list-sub" style="margin-top:8px;">This will permanently wipe this entire project, including its saved file. This cannot be undone.</div>
+          <button class="danger-trash-trigger ${armed ? 'armed' : ''}" id="projectDeleteRun" aria-label="Delete project">
+            ${icons.trash}
+          </button>
+          <div class="danger-zone-note ${armed ? 'armed' : ''}">${armed ? 'FINAL WARNING: Tap trash again now to permanently wipe this project.' : 'Tap the trash button twice to confirm permanent deletion.'}</div>
+        </div>
+      </div>`
+    body.querySelector('#projectDeleteRun')?.addEventListener('click', () => {
+      if (!this._projectDeleteArmed) {
+        this._projectDeleteArmed = true
+        this._setProjectMenuTab('delete')
+        return
+      }
+      store.deleteProject(this.projectId)
+      this._closeProjectMenu()
+      pop()
+    })
   }
 
   _refresh() {
@@ -194,7 +366,7 @@ export class ProjectScreen {
       const coverRows = specialCover ? null : this._sceneCoverBubbles(scene, project)
       return `
         <div class="project-card project-scene-card" data-scene-id="${scene.id}" role="button" tabindex="0">
-          <div class="project-cover" style="${specialCover ? '' : `background:${this._coverGradientFromScene(scene, project)};`}">
+          <div class="project-cover ${specialCover ? 'project-cover-special' : ''}" style="${specialCover ? '' : `background:${this._coverGradientFromScene(scene, project)};`}">
             <div class="project-cover-overlay"></div>
             <div style="position:absolute;top:8px;right:8px;display:flex;gap:6px;z-index:2;">
               <button class="project-scene-menu-btn" data-scene-id="${scene.id}" type="button" style="border:0;background:rgba(0,0,0,0.38);color:#fff;border-radius:10px;padding:5px 8px;font-size:11px;cursor:pointer;">•••</button>

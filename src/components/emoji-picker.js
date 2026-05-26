@@ -1,9 +1,21 @@
 let _emojiData = null
+let _emojiIndex = null
+const _emojiImageCache = new Set()
 
-const LONG_PRESS_MS = 400
+const LONG_PRESS_MS = 90
 
 function svgUrl(hexcode) {
   return `/openmoji/svg/${hexcode}.svg`
+}
+
+function preloadEmojiHexcodes(hexcodes = []) {
+  for (const hex of hexcodes) {
+    if (!hex || _emojiImageCache.has(hex)) continue
+    _emojiImageCache.add(hex)
+    const img = new Image()
+    img.decoding = 'async'
+    img.src = svgUrl(hex)
+  }
 }
 
 async function getEmojiData() {
@@ -12,6 +24,33 @@ async function getEmojiData() {
   if (!res.ok) throw new Error('Failed to load emoji data')
   _emojiData = await res.json()
   return _emojiData
+}
+
+async function getEmojiIndex() {
+  if (_emojiIndex) return _emojiIndex
+  const data = await getEmojiData()
+  const base = getBaseEmojis(data)
+  const groups = getGroups(base)
+  const byGroup = new Map()
+  for (const g of groups) byGroup.set(g, [])
+  for (const row of base) {
+    if (!byGroup.has(row.group)) byGroup.set(row.group, [])
+    byGroup.get(row.group).push(row)
+  }
+
+  const variantMap = new Map()
+  for (const row of data || []) {
+    if (!row?.skintone_base_hexcode || !row?.skintone) continue
+    if (!variantMap.has(row.skintone_base_hexcode)) variantMap.set(row.skintone_base_hexcode, [])
+    variantMap.get(row.skintone_base_hexcode).push(row)
+  }
+
+  _emojiIndex = { data, base, groups, byGroup, variantMap }
+  return _emojiIndex
+}
+
+export function prefetchEmojiData() {
+  getEmojiIndex().catch(() => {})
 }
 
 function getBaseEmojis(data) {
@@ -30,9 +69,9 @@ function getGroups(base) {
 }
 
 export async function createEmojiPicker({ onSelect, onClose }) {
-  const data = await getEmojiData()
-  const base = getBaseEmojis(data)
-  const groups = getGroups(base)
+  let currentOnSelect = onSelect
+  let currentOnClose = onClose
+  const { groups, byGroup, variantMap } = await getEmojiIndex()
   const firstGroup = groups[0] || ''
 
   let activeGroup = firstGroup
@@ -40,32 +79,25 @@ export async function createEmojiPicker({ onSelect, onClose }) {
   let longPressTimer = null
   let longPressTriggered = false
   let popupEl = null
+  let gridEventsBound = false
+  const groupGridMarkupCache = new Map()
+  let gridRenderToken = 0
 
   const panel = document.createElement('div')
   panel.className = 'ep-panel'
   panel.innerHTML = `
     <input class="ep-search" type="text" placeholder="Search emoji" />
-    <div class="ep-cats"></div>
     <div class="ep-grid"></div>
+    <div class="ep-cats ep-cats-bottom"></div>
   `
 
   const search = panel.querySelector('.ep-search')
-  const cats = panel.querySelector('.ep-cats')
+  const catsBottom = panel.querySelector('.ep-cats-bottom')
   const grid = panel.querySelector('.ep-grid')
 
-  let scrollTimer = null
-  grid.addEventListener('scroll', () => {
-    grid.classList.remove('scrollbar-hidden')
-    clearTimeout(scrollTimer)
-    scrollTimer = setTimeout(() => grid.classList.add('scrollbar-hidden'), 2000)
-  })
-
-  const byGroup = new Map()
-  for (const g of groups) byGroup.set(g, [])
-  for (const row of base) {
-    if (!byGroup.has(row.group)) byGroup.set(row.group, [])
-    byGroup.get(row.group).push(row)
-  }
+  const initialGroupRows = byGroup.get(firstGroup) || []
+  preloadEmojiHexcodes(initialGroupRows.slice(0, 48).map(r => r.hexcode))
+  preloadEmojiHexcodes(groups.map(g => byGroup.get(g)?.[0]?.hexcode).filter(Boolean))
 
   function closeSkinPopup() {
     if (!popupEl) return
@@ -74,15 +106,21 @@ export async function createEmojiPicker({ onSelect, onClose }) {
   }
 
   function renderCats() {
-    cats.innerHTML = groups.map(g => {
-      const icon = byGroup.get(g)?.[0]?.emoji || '•'
+    const catsHtml = groups.map(g => {
+      const first = byGroup.get(g)?.[0]
+      const icon = first?.hexcode
+        ? `<img class="ep-cat-img" src="${svgUrl(first.hexcode)}" alt="${first.emoji || g}" loading="eager" />`
+        : `<span class="ep-cat-fallback">${first?.emoji || '•'}</span>`
       const active = g === activeGroup ? 'active' : ''
       return `<button class="ep-cat ${active}" data-group="${g}" type="button" title="${g}">${icon}</button>`
     }).join('')
+    catsBottom.innerHTML = catsHtml
 
-    cats.querySelectorAll('[data-group]').forEach(btn => {
+    catsBottom.querySelectorAll('[data-group]').forEach(btn => {
       btn.addEventListener('click', () => {
         activeGroup = btn.dataset.group || firstGroup
+        const groupRows = byGroup.get(activeGroup) || []
+        preloadEmojiHexcodes(groupRows.slice(0, 48).map(r => r.hexcode))
         renderCats()
         renderGrid()
       })
@@ -98,9 +136,35 @@ export async function createEmojiPicker({ onSelect, onClose }) {
       return text.includes(q)
     })
 
-    grid.innerHTML = rows.map(row => {
-      return `<button class="ep-cell" data-hexcode="${row.hexcode}" data-emoji="${row.emoji}" type="button" aria-label="${row.annotation || row.emoji}"><img src="${svgUrl(row.hexcode)}" alt="${row.emoji}" loading="lazy" /></button>`
-    }).join('')
+    const token = ++gridRenderToken
+    grid.innerHTML = ''
+
+    if (!q && groupGridMarkupCache.has(activeGroup)) {
+      grid.innerHTML = groupGridMarkupCache.get(activeGroup) || ''
+    } else {
+      const CHUNK = 72
+      let idx = 0
+      let fullMarkup = ''
+      const renderChunk = () => {
+        if (token !== gridRenderToken) return
+        const end = Math.min(rows.length, idx + CHUNK)
+        let chunkHtml = ''
+        for (let i = idx; i < end; i += 1) {
+          const row = rows[i]
+          const loading = i < 36 ? 'eager' : 'lazy'
+          chunkHtml += `<button class="ep-cell" data-hexcode="${row.hexcode}" data-emoji="${row.emoji}" type="button" aria-label="${row.annotation || row.emoji}"><img src="${svgUrl(row.hexcode)}" alt="${row.emoji}" loading="${loading}" /></button>`
+        }
+        fullMarkup += chunkHtml
+        grid.insertAdjacentHTML('beforeend', chunkHtml)
+        idx = end
+        if (idx < rows.length) {
+          requestAnimationFrame(renderChunk)
+        } else if (!q) {
+          groupGridMarkupCache.set(activeGroup, fullMarkup)
+        }
+      }
+      renderChunk()
+    }
 
     const showSkintonePopup = (cell, variants) => {
       closeSkinPopup()
@@ -108,7 +172,7 @@ export async function createEmojiPicker({ onSelect, onClose }) {
       popupEl.className = 'ep-skintone-popup'
       popupEl.innerHTML = variants.map(v => `
         <button class="ep-cell" data-emoji="${v.emoji}" type="button" aria-label="${v.annotation || v.emoji}">
-          <img src="${svgUrl(v.hexcode)}" alt="${v.emoji}" loading="lazy" />
+          <img src="${svgUrl(v.hexcode)}" alt="${v.emoji}" loading="eager" />
         </button>
       `).join('')
       panel.appendChild(popupEl)
@@ -118,55 +182,105 @@ export async function createEmojiPicker({ onSelect, onClose }) {
       const popupWidth = Math.max(180, variants.length * 38 + 12)
       popupEl.style.width = `${popupWidth}px`
       const left = Math.max(8, Math.min(cellRect.left - panelRect.left - popupWidth / 2 + cellRect.width / 2, panelRect.width - popupWidth - 8))
-      const top = Math.max(8, cellRect.top - panelRect.top - 52)
+      const popupHeight = popupEl.getBoundingClientRect().height || 52
+      const gap = 6
+      const cellTop = cellRect.top - panelRect.top
+      const cellBottom = cellRect.bottom - panelRect.top
+      const spaceAbove = cellTop - 8
+      const spaceBelow = panelRect.height - cellBottom - 8
+
+      const shouldPlaceAbove = spaceAbove >= (popupHeight + gap) || spaceAbove > spaceBelow
+      let top = shouldPlaceAbove
+        ? (cellTop - popupHeight - gap)
+        : (cellBottom + gap)
+      top = Math.max(8, Math.min(top, panelRect.height - popupHeight - 8))
+
+      popupEl.dataset.placement = shouldPlaceAbove ? 'above' : 'below'
       popupEl.style.left = `${left}px`
       popupEl.style.top = `${top}px`
 
       popupEl.querySelectorAll('[data-emoji]').forEach(btn => {
         btn.addEventListener('click', () => {
-          onSelect?.(btn.dataset.emoji || '')
-          onClose?.()
+          currentOnSelect?.(btn.dataset.emoji || '')
+          currentOnClose?.()
         })
       })
     }
 
-    grid.querySelectorAll('.ep-cell').forEach(cell => {
-      const hex = cell.dataset.hexcode || ''
-      const emoji = cell.dataset.emoji || ''
-      const baseRow = rows.find(r => r.hexcode === hex)
-      const variants = (data || []).filter(v => v.skintone_base_hexcode === hex && !!v.skintone)
+    if (!gridEventsBound) {
+      const clearPress = () => {
+        clearTimeout(longPressTimer)
+      }
+      let pressedCell = null
+      let pressedVariants = null
+      let pressedAt = 0
 
-      cell.addEventListener('pointerdown', () => {
+      grid.addEventListener('pointerdown', (e) => {
+        const cell = e.target?.closest?.('.ep-cell')
+        if (!cell || !grid.contains(cell)) return
+        const hex = cell.dataset.hexcode || ''
+        const variants = variantMap.get(hex) || []
+        pressedCell = cell
+        pressedVariants = variants
+        pressedAt = performance.now()
         longPressTriggered = false
         clearTimeout(longPressTimer)
-        if (!baseRow || !variants.length) return
+        if (!variants.length) return
+        preloadEmojiHexcodes(variants.map(v => v.hexcode))
         longPressTimer = setTimeout(() => {
           longPressTriggered = true
           showSkintonePopup(cell, variants)
         }, LONG_PRESS_MS)
       })
 
-      const clearPress = () => {
-        clearTimeout(longPressTimer)
-      }
-      cell.addEventListener('pointerup', clearPress)
-      cell.addEventListener('pointercancel', clearPress)
-      cell.addEventListener('pointerleave', clearPress)
+      grid.addEventListener('contextmenu', (e) => {
+        if (e.target?.closest?.('.ep-cell')) e.preventDefault()
+      })
 
-      cell.addEventListener('click', () => {
+      grid.addEventListener('pointerup', clearPress)
+      grid.addEventListener('pointercancel', clearPress)
+      grid.addEventListener('pointerleave', clearPress)
+
+      grid.addEventListener('click', (e) => {
+        const cell = e.target?.closest?.('.ep-cell')
+        if (!cell || !grid.contains(cell)) return
+
+        if (!longPressTriggered && pressedCell === cell && (pressedVariants?.length || 0) > 0) {
+          const heldMs = performance.now() - pressedAt
+          if (heldMs >= LONG_PRESS_MS * 0.75) {
+            longPressTriggered = true
+            showSkintonePopup(cell, pressedVariants)
+            return
+          }
+        }
+
         if (longPressTriggered) {
           longPressTriggered = false
           return
         }
-        onSelect?.(emoji)
-        onClose?.()
+        currentOnSelect?.(cell.dataset.emoji || '')
+        currentOnClose?.()
       })
-    })
+
+      gridEventsBound = true
+    }
   }
 
   const onDocumentPointerDown = (e) => {
     if (panel.contains(e.target)) return
-    onClose?.()
+    currentOnClose?.()
+  }
+
+  let outsideListenerActive = false
+  const activateOutsideListener = () => {
+    if (outsideListenerActive) return
+    document.addEventListener('pointerdown', onDocumentPointerDown, true)
+    outsideListenerActive = true
+  }
+  const deactivateOutsideListener = () => {
+    if (!outsideListenerActive) return
+    document.removeEventListener('pointerdown', onDocumentPointerDown, true)
+    outsideListenerActive = false
   }
 
   search.addEventListener('input', () => {
@@ -177,15 +291,26 @@ export async function createEmojiPicker({ onSelect, onClose }) {
   panel.destroyPicker = () => {
     clearTimeout(longPressTimer)
     closeSkinPopup()
-    document.removeEventListener('pointerdown', onDocumentPointerDown, true)
+    deactivateOutsideListener()
+  }
+
+  panel.setPickerHandlers = ({ onSelect: nextOnSelect, onClose: nextOnClose } = {}) => {
+    if (typeof nextOnSelect === 'function') currentOnSelect = nextOnSelect
+    if (typeof nextOnClose === 'function') currentOnClose = nextOnClose
+  }
+
+  panel.activatePicker = () => {
+    activateOutsideListener()
+  }
+
+  panel.deactivatePicker = () => {
+    clearTimeout(longPressTimer)
+    closeSkinPopup()
+    deactivateOutsideListener()
   }
 
   renderCats()
   renderGrid()
-
-  setTimeout(() => {
-    document.addEventListener('pointerdown', onDocumentPointerDown, true)
-  }, 0)
 
   return panel
 }

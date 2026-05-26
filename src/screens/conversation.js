@@ -2,7 +2,7 @@ import { store } from '../store.js'
 import { push, pop } from '../router.js'
 import { icons } from '../components/icons.js'
 import { renderMessages, renderTypingIndicator, hexToRgb } from '../components/bubble.js'
-import { createEmojiPicker } from '../components/emoji-picker.js'
+import { createEmojiPicker, prefetchEmojiData } from '../components/emoji-picker.js'
 
 const DEFAULT_DIVIDER_STYLE = {
   date_label: 'Today',
@@ -47,6 +47,8 @@ export class ConversationScreen {
     this._dragSrcId = null
     this._removeCanvasDragListeners = null
     this._emojiPicker = null
+    this._reactionEmojiPicker = null
+    this._reactionEmojiOverlay = null
     this._inlineEmojiPicker = null
     this._reorderMode = false
     this._attachSheetOverlay = null
@@ -73,53 +75,34 @@ export class ConversationScreen {
       <div class="reorder-banner" id="reorderBanner">Drag to reorder - tap ✓ when done</div>
       <div class="conversation-canvas" id="convCanvas"></div>
       <div class="command-center">
-        <div class="speaker-strip" id="speakerStrip"></div>
         <div class="audio-pill" id="audioPill">
-          <div class="audio-pill-grid">
-            <div class="audio-pill-button" data-action="mic">${icons.mic}</div>
-            <div class="audio-pill-button" data-action="play">${icons.play}</div>
-            <div class="audio-pill-button" data-action="rewind">${icons.rewind}</div>
+          <div class="audio-pill-left">
+            <div class="audio-pill-grid">
+              <div class="audio-pill-button" data-action="attach">${icons.attach}</div>
+              <div class="audio-pill-button" data-action="mic">${icons.mic}</div>
+              <div class="audio-pill-button" data-action="play">${icons.play}</div>
+              <div class="audio-pill-button" data-action="rewind">${icons.rewind5}</div>
+            </div>
+            <div class="audio-pill-switches compact">
+              <label class="audio-pill-switch"><input id="composeMusicLoop" type="checkbox" checked /> Loop</label>
+              <label class="audio-pill-switch"><input id="composeMusicFade" type="checkbox" checked /> Fade</label>
+            </div>
           </div>
-          <div class="audio-pill-divider"></div>
+          <div class="audio-pill-divider">
+            <input class="audio-pill-volume-slider vertical" id="composeMusicVolume" type="range" min="0" max="100" step="1" value="70" aria-label="Volume" />
+          </div>
           <div class="audio-pill-timeline">
-            <div class="audio-pill-title">Audio tools</div>
-            <div class="audio-pill-sub" id="audioPillSub">Background track and voice tools</div>
-              <div class="audio-pill-actions">
-                <button class="audio-pill-action primary" id="audioRecordBtn" type="button">Record</button>
+            <div class="audio-pill-music compact">
+              <div class="audio-pill-music-title" id="composeMusicTitle">No audio selected</div>
+              <div class="audio-pill-music-time">
+                <span id="composeMusicNow">00:00.0</span>
+                <span id="composeMusicTotal">00:00</span>
               </div>
-              <div class="audio-pill-music">
-                <div class="audio-pill-music-head">
-                  <div>
-                    <div class="audio-pill-music-title" id="composeMusicTitle">No audio selected</div>
-                    <div class="audio-pill-music-sub" id="composeMusicSub">Pick a background track for this story</div>
-                  </div>
-                  <button class="audio-pill-action primary" id="composeMusicPickBtn" type="button">Pick music</button>
-                </div>
-                <div class="audio-pill-music-actions">
-                  <button class="audio-pill-mini-btn" id="composeMusicPlayBtn" type="button">${icons.play}</button>
-                  <button class="audio-pill-mini-btn" id="composeMusicRewindBtn" type="button">${icons.rewind}</button>
-                  <button class="audio-pill-mini-btn" id="composeMusicClearBtn" type="button">✕</button>
-                </div>
-                <div class="audio-pill-volume">
-                  <div class="audio-pill-volume-head">
-                    <span>Music volume</span>
-                    <span id="composeMusicVolumeLabel">70%</span>
-                  </div>
-                  <input class="audio-pill-volume-slider" id="composeMusicVolume" type="range" min="0" max="100" step="1" value="70" />
-                </div>
-                <div class="audio-pill-switches">
-                  <label class="audio-pill-switch"><input id="composeMusicLoop" type="checkbox" checked /> Loop music</label>
-                  <label class="audio-pill-switch"><input id="composeMusicFade" type="checkbox" checked /> Fade music</label>
-                </div>
-                <div class="audio-pill-music-time">
-                  <span id="composeMusicNow">00:00.0</span>
-                  <span id="composeMusicTotal">00:00</span>
-                </div>
-                <input class="audio-pill-music-seek" id="composeMusicSeek" type="range" min="0" max="0.1" step="0.1" value="0" />
-              </div>
-            <div class="audio-pill-track"><div class="audio-pill-fill" style="width:38%"></div></div>
+              <input class="audio-pill-music-seek" id="composeMusicSeek" type="range" min="0" max="0.1" step="0.1" value="0" />
+            </div>
           </div>
         </div>
+        <div class="speaker-strip" id="speakerStrip"></div>
         <div class="compose-row">
           <div class="compose-music-btn" id="audioToggleBtn" title="Audio">${icons.music}</div>
           <div class="compose-pill" id="composePill">
@@ -141,6 +124,7 @@ export class ConversationScreen {
   }
 
   bind() {
+    prefetchEmojiData()
     store.on('project-changed', this._onChange)
     this._el.addEventListener('click', this._onRootClick)
 
@@ -151,14 +135,9 @@ export class ConversationScreen {
     })
     this._el.querySelector('#menuBtn').addEventListener('click', () => this._openHub())
     this._el.querySelector('#audioToggleBtn').addEventListener('click', () => this._toggleAudioPill())
-    this._el.querySelector('#composeMusicPickBtn').addEventListener('click', () => this._el.querySelector('#composeMusicInput')?.click())
-    this._el.querySelector('#composeMusicPlayBtn').addEventListener('click', () => this._toggleComposeMusicPlay())
-    this._el.querySelector('#composeMusicRewindBtn').addEventListener('click', () => this._rewindComposeMusic())
-    this._el.querySelector('#composeMusicClearBtn').addEventListener('click', () => this._clearComposeMusic())
     this._el.querySelector('#composeMusicVolume').addEventListener('input', e => this._setComposeMusicVolume(e.target))
     this._el.querySelector('#composeMusicLoop').addEventListener('change', e => this._setComposeMusicFlags({ loop_music: e.target.checked }))
     this._el.querySelector('#composeMusicFade').addEventListener('change', e => this._setComposeMusicFlags({ fade_music: e.target.checked }))
-    this._el.querySelector('#audioRecordBtn').addEventListener('click', () => this._toggleAudioRecording())
     this._el.querySelector('#composeMusicInput').addEventListener('change', e => this._pickComposeMusic(e.target))
     this._el.querySelector('#composeAudioInput').addEventListener('change', e => this._pickComposeAudio(e.target))
     this._el.querySelector('#composeCameraInput').addEventListener('change', e => this._pickComposeMedia(e.target))
@@ -170,10 +149,12 @@ export class ConversationScreen {
     this._el.querySelectorAll('.audio-pill-button').forEach(btn => {
       btn.addEventListener('click', () => {
         const action = btn.dataset.action
-        if (action === 'play') {
-          this._playPendingAudio()
+        if (action === 'attach') {
+          this._el.querySelector('#composeMusicInput')?.click()
+        } else if (action === 'play') {
+          this._toggleComposeMusicPlay()
         } else if (action === 'rewind') {
-          this._restartPendingAudio()
+          this._rewindComposeMusic()
         } else if (action === 'mic') {
           this._toggleAudioRecording()
         }
@@ -316,7 +297,14 @@ export class ConversationScreen {
     this._closeBubbleOptionsSheet(true)
     this._closeAttachSheet(true)
     this._closeEmojiPicker()
+    this._closeReactionEmojiPicker()
     this._closeInlineEmojiPicker()
+    this._emojiPicker?.destroyPicker?.()
+    this._reactionEmojiPicker?.destroyPicker?.()
+    this._inlineEmojiPicker?.destroyPicker?.()
+    this._emojiPicker = null
+    this._reactionEmojiPicker = null
+    this._inlineEmojiPicker = null
     this._stopComposeMusic()
     this._endBubblePress()
   }
@@ -453,7 +441,7 @@ export class ConversationScreen {
       this._bubbleLongPressTimer = null
       this._bubbleLongPressSuppressedMsgId = msgId
       this._showReactionPicker(scene, msgId, bub)
-    }, 320)
+    }, 220)
   }
 
   _endBubblePress() {
@@ -465,13 +453,15 @@ export class ConversationScreen {
 
   _showReactionPicker(scene, msgId, anchorEl = null) {
     this._closeBubbleOptionsSheet(true)
+    this._closeReactionEmojiPicker()
     const message = scene.messages.find(m => m.id === msgId)
     if (!message) return
+    const anchor = anchorEl || this._el.querySelector(`.bubble[data-msg-id="${msgId}"]`)
 
     const overlay = document.createElement('div')
-    overlay.className = anchorEl ? 'sheet-overlay reaction-overlay' : 'sheet-overlay'
+    overlay.className = 'sheet-overlay reaction-overlay'
     const sheet = document.createElement('div')
-    sheet.className = anchorEl ? 'bubble-menu reaction-menu' : 'bottom-sheet bubble-options-sheet'
+    sheet.className = 'bubble-menu reaction-menu'
     const reactionsMeta = [
       { char: '😂', hex: '1F602' },
       { char: '❤️', hex: '2764' },
@@ -480,36 +470,29 @@ export class ConversationScreen {
       { char: '🔥', hex: '1F525' },
       { char: '👍', hex: '1F44D' },
     ]
-    const reactions = Array.isArray(message.reactions)
-      ? message.reactions
-      : (message.reaction ? [message.reaction] : [])
+    const activeReaction = this._getMessageReaction(message)
     const reactionsHtml = `
-      <div class="bubble-options-react-strip">
+      <div class="bubble-options-react-strip compact">
         ${reactionsMeta.map(item => {
-          const active = reactions.includes(item.char)
+          const active = activeReaction === item.char
           return `<button class="bubble-options-emoji ${active ? 'active' : ''}" data-emoji="${item.char}" type="button"><img src="/openmoji/svg/${item.hex}.svg" alt="${item.char}" loading="lazy" /></button>`
         }).join('')}
+        <button class="bubble-options-more" data-action="more" type="button" aria-label="More options">...</button>
       </div>`
 
-    sheet.innerHTML = anchorEl
-      ? `<div class="reaction-menu-label">React</div>${reactionsHtml}<button class="bubble-options-action" data-action="more" type="button" style="margin-top:8px;">More options</button>`
-      : `<div class="bottom-sheet-handle"></div><div class="bottom-sheet-title">React</div>${reactionsHtml}`
+    const status = message.status || ''
+    sheet.innerHTML = `<div class="reaction-menu-label">React</div>${reactionsHtml}
+      <div class="reaction-status-row">
+        <button class="reaction-status-btn ${status === 'sent' ? 'active' : ''}" data-status="sent" type="button" title="Sent"><span class="reaction-status-icon">✓</span></button>
+        <button class="reaction-status-btn ${status === 'delivered' ? 'active' : ''}" data-status="delivered" type="button" title="Delivered"><span class="reaction-status-icon">✓✓</span></button>
+        <button class="reaction-status-btn ${status === 'seen' ? 'active' : ''}" data-status="seen" type="button" title="Seen"><span class="reaction-status-icon">◎</span></button>
+      </div>`
 
     this._bubbleOptionsOverlay = overlay
     this._bubbleOptionsSheet = sheet
     this._el.appendChild(overlay)
     this._el.appendChild(sheet)
-
-    if (anchorEl) {
-      const hostRect = this._el.getBoundingClientRect()
-      const bubRect = anchorEl.getBoundingClientRect()
-      const menuWidth = 254
-      const left = Math.min(Math.max(8, (bubRect.left - hostRect.left) + (bubRect.width / 2) - (menuWidth / 2)), hostRect.width - menuWidth - 8)
-      const preferTop = (bubRect.top - hostRect.top) - 96
-      const top = preferTop < 58 ? (bubRect.bottom - hostRect.top + 8) : preferTop
-      sheet.style.left = `${left}px`
-      sheet.style.top = `${top}px`
-    }
+    this._positionBubblePopup(sheet, anchor)
 
     const close = () => this._closeBubbleOptionsSheet()
     overlay.addEventListener('click', close)
@@ -517,66 +500,65 @@ export class ConversationScreen {
     sheet.querySelectorAll('[data-emoji]').forEach(item => {
       item.addEventListener('click', () => {
         const emoji = item.dataset.emoji
-        const current = Array.isArray(message.reactions)
-          ? [...message.reactions]
-          : (message.reaction ? [message.reaction] : [])
-        const nextReactions = current.includes(emoji)
-          ? current.filter(r => r !== emoji)
-          : [...current, emoji]
-        store.updateMessage(this.projectId, scene.id, msgId, { reactions: nextReactions, reaction: null })
+        this._setMessageReaction(scene, msgId, emoji)
+        close()
+      })
+    })
+
+    sheet.querySelectorAll('[data-status]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const value = btn.dataset.status
+        if (!value) return
+        const currentStatus = message.status || ''
+        const nextStatus = currentStatus === value ? '' : value
+        store.updateMessage(this.projectId, scene.id, msgId, { status: nextStatus })
         close()
       })
     })
 
     sheet.querySelector('[data-action="more"]')?.addEventListener('click', () => {
-      this._showBubbleOptions(store.getProject(this.projectId), scene, msgId)
+      this._openReactionEmojiPicker(scene, msgId, anchor)
     })
 
     requestAnimationFrame(() => {
       overlay.classList.add('visible')
-      sheet.classList.add('visible')
     })
   }
 
-  _showBubbleOptions(p, scene, msgId) {
+  _showBubbleOptions(p, scene, msgId, anchorEl = null) {
     this._closeBubbleOptionsSheet(true)
+    this._closeReactionEmojiPicker()
     const msg = scene.messages.find(m => m.id === msgId)
     if (!msg) return
+    const anchor = anchorEl || this._el.querySelector(`.bubble[data-msg-id="${msgId}"]`)
     const actor = p.actors.find(a => a.id === msg.actor_id)
     const targetSide = actor?.side === 'right' ? 'left' : 'right'
-    const status = msg.status || ''
 
     const overlay = document.createElement('div')
-    overlay.className = 'sheet-overlay'
+    overlay.className = 'sheet-overlay reaction-overlay'
     const sheet = document.createElement('div')
-    sheet.className = 'bottom-sheet bubble-options-sheet'
+    sheet.className = 'bubble-menu bubble-more-menu'
     sheet.innerHTML = `
-      <div class="bottom-sheet-handle"></div>
-      <div class="bottom-sheet-title">Message Options</div>
-      <div class="bubble-options-list">
+      <div class="reaction-menu-label">Message</div>
+      <div class="bubble-options-list compact">
         <button class="bubble-options-action" data-action="react" type="button">React</button>
         <button class="bubble-options-action" data-action="duplicate-pov" type="button">Duplicate POV</button>
         <button class="bubble-options-action" data-action="flip" type="button">Flip side</button>
         <button class="bubble-options-action" data-action="copy" type="button">Copy text</button>
         <button class="bubble-options-action danger" data-action="delete" type="button">Delete</button>
-      </div>
-      <div class="bubble-options-status-row">
-        <div class="bubble-options-status-label">Status</div>
-        <div class="bubble-options-status-pills">
-          ${['sent', 'delivered', 'seen'].map(value => `<button class="bubble-options-status-pill ${status === value ? 'active' : ''}" data-status="${value}" type="button">${value[0].toUpperCase()}${value.slice(1)}</button>`).join('')}
-        </div>
       </div>`
 
     this._bubbleOptionsOverlay = overlay
     this._bubbleOptionsSheet = sheet
     this._el.appendChild(overlay)
     this._el.appendChild(sheet)
+    this._positionBubblePopup(sheet, anchor)
 
     const close = () => this._closeBubbleOptionsSheet()
     overlay.addEventListener('click', close)
 
     sheet.querySelector('[data-action="react"]')?.addEventListener('click', () => {
-      this._showReactionPicker(scene, msgId)
+      this._showReactionPicker(scene, msgId, anchor)
     })
     sheet.querySelector('[data-action="duplicate-pov"]')?.addEventListener('click', () => {
       this._duplicateMessageWithPov(scene, msgId)
@@ -603,19 +585,110 @@ export class ConversationScreen {
       close()
     })
 
-    sheet.querySelectorAll('[data-status]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const value = btn.dataset.status
-        if (!value) return
-        store.updateMessage(this.projectId, scene.id, msgId, { status: value })
-        close()
-      })
-    })
-
     requestAnimationFrame(() => {
       overlay.classList.add('visible')
-      sheet.classList.add('visible')
     })
+  }
+
+  _positionBubblePopup(sheet, anchorEl) {
+    if (!sheet?.isConnected) return
+    const hostRect = this._el.getBoundingClientRect()
+    const anchorRect = anchorEl?.getBoundingClientRect()
+    const menuRect = sheet.getBoundingClientRect()
+
+    const fallbackLeft = Math.max(8, (hostRect.width - menuRect.width) / 2)
+    const fallbackTop = 90
+    if (!anchorRect) {
+      sheet.style.left = `${fallbackLeft}px`
+      sheet.style.top = `${fallbackTop}px`
+      return
+    }
+
+    const topSpace = anchorRect.top - hostRect.top
+    const bottomSpace = hostRect.bottom - anchorRect.bottom
+    const gap = 8
+
+    let top = anchorRect.top - hostRect.top - menuRect.height - gap
+    if (topSpace < menuRect.height + 14) {
+      top = anchorRect.bottom - hostRect.top + gap
+    } else if (bottomSpace < menuRect.height + 14) {
+      top = anchorRect.top - hostRect.top - menuRect.height - gap
+    }
+
+    const centeredLeft = (anchorRect.left - hostRect.left) + (anchorRect.width / 2) - (menuRect.width / 2)
+    const left = Math.min(Math.max(8, centeredLeft), hostRect.width - menuRect.width - 8)
+    const maxTop = Math.max(54, hostRect.height - menuRect.height - 8)
+    sheet.style.left = `${left}px`
+    sheet.style.top = `${Math.min(Math.max(54, top), maxTop)}px`
+  }
+
+  _getMessageReaction(message) {
+    if (!message) return ''
+    if (typeof message.reaction === 'string' && message.reaction.trim()) return message.reaction
+    if (Array.isArray(message.reactions) && message.reactions.length) return String(message.reactions[0] || '')
+    return ''
+  }
+
+  _setMessageReaction(scene, msgId, emoji) {
+    const message = scene?.messages?.find(m => m.id === msgId)
+    if (!message) return
+    const current = this._getMessageReaction(message)
+    const next = current === emoji ? '' : (emoji || '')
+    store.updateMessage(this.projectId, scene.id, msgId, {
+      reaction: next || null,
+      reactions: next ? [next] : [],
+    })
+  }
+
+  async _openReactionEmojiPicker(scene, msgId, anchorEl = null) {
+    this._closeBubbleOptionsSheet(true)
+    this._closeReactionEmojiPicker()
+    try {
+      if (!this._reactionEmojiPicker) {
+        this._reactionEmojiPicker = await createEmojiPicker({
+          onSelect: (emoji) => {
+            this._setMessageReaction(scene, msgId, emoji)
+            this._closeReactionEmojiPicker()
+          },
+          onClose: () => {
+            this._closeReactionEmojiPicker()
+          },
+        })
+      }
+
+      this._reactionEmojiPicker.setPickerHandlers?.({
+        onSelect: (emoji) => {
+          this._setMessageReaction(scene, msgId, emoji)
+          this._closeReactionEmojiPicker()
+        },
+        onClose: () => {
+          this._closeReactionEmojiPicker()
+        },
+      })
+
+      const picker = this._reactionEmojiPicker
+      picker.classList.add('reaction-emoji-picker', 'reaction-emoji-card')
+      const overlay = document.createElement('div')
+      overlay.className = 'sheet-overlay reaction-overlay reaction-emoji-card-overlay visible'
+      overlay.addEventListener('click', () => this._closeReactionEmojiPicker())
+      this._reactionEmojiOverlay = overlay
+
+      this._el.appendChild(overlay)
+      picker.style.position = 'absolute'
+      picker.style.zIndex = '540'
+      this._el.appendChild(picker)
+      picker.activatePicker?.()
+    } catch {
+      this._snack('Could not open emoji picker.')
+    }
+  }
+
+  _closeReactionEmojiPicker() {
+    this._reactionEmojiOverlay?.remove()
+    this._reactionEmojiOverlay = null
+    if (!this._reactionEmojiPicker) return
+    this._reactionEmojiPicker.deactivatePicker?.()
+    this._reactionEmojiPicker.remove()
   }
 
   _closeBubbleOptionsSheet(immediate = false) {
@@ -840,7 +913,19 @@ export class ConversationScreen {
   async _showInlineEmojiPicker(textareaEl, anchorEl) {
     this._closeInlineEmojiPicker()
     try {
-      const picker = await createEmojiPicker({
+      if (!this._inlineEmojiPicker) {
+        this._inlineEmojiPicker = await createEmojiPicker({
+          onSelect: (char) => {
+            this._insertEmojiAtCursor(textareaEl, char)
+            this._closeInlineEmojiPicker()
+          },
+          onClose: () => {
+            this._closeInlineEmojiPicker()
+          },
+        })
+      }
+
+      this._inlineEmojiPicker.setPickerHandlers?.({
         onSelect: (char) => {
           this._insertEmojiAtCursor(textareaEl, char)
           this._closeInlineEmojiPicker()
@@ -849,15 +934,17 @@ export class ConversationScreen {
           this._closeInlineEmojiPicker()
         },
       })
+
       const rect = anchorEl.getBoundingClientRect()
       const appRect = this._el.getBoundingClientRect()
+      const picker = this._inlineEmojiPicker
       picker.style.position = 'absolute'
       picker.style.bottom = `${Math.max(12, appRect.bottom - rect.top + 8)}px`
       picker.style.left = '8px'
       picker.style.right = '8px'
       picker.style.zIndex = '600'
       this._el.appendChild(picker)
-      this._inlineEmojiPicker = picker
+      picker.activatePicker?.()
     } catch {
       this._snack('Could not open emoji picker.')
     }
@@ -874,9 +961,8 @@ export class ConversationScreen {
 
   _closeInlineEmojiPicker() {
     if (!this._inlineEmojiPicker) return
-    this._inlineEmojiPicker.destroyPicker?.()
+    this._inlineEmojiPicker.deactivatePicker?.()
     this._inlineEmojiPicker.remove()
-    this._inlineEmojiPicker = null
   }
 
   _enterEditMode(sceneId, msgId, text) {
@@ -1135,12 +1221,9 @@ export class ConversationScreen {
   _syncComposeMusicTools(p = store.getProject(this.projectId)) {
     const rs = p?.render_settings || {}
     const title = this._el?.querySelector('#composeMusicTitle')
-    const sub = this._el?.querySelector('#composeMusicSub')
     const now = this._el?.querySelector('#composeMusicNow')
     const total = this._el?.querySelector('#composeMusicTotal')
     const seek = this._el?.querySelector('#composeMusicSeek')
-    const playBtn = this._el?.querySelector('#composeMusicPlayBtn')
-    const rewindBtn = this._el?.querySelector('#composeMusicRewindBtn')
     const volume = this._el?.querySelector('#composeMusicVolume')
     const volumeLabel = this._el?.querySelector('#composeMusicVolumeLabel')
     const loop = this._el?.querySelector('#composeMusicLoop')
@@ -1153,13 +1236,15 @@ export class ConversationScreen {
     const musicFade = rs.fade_music !== false
 
     if (title) title.textContent = musicTitle
-    if (volume) volume.value = String(Math.round(musicVolume * 100))
+    if (volume) {
+      volume.value = String(Math.round(musicVolume * 100))
+      this._paintComposeVolumeSlider(volume, Number(volume.value || 0))
+    }
     if (volumeLabel) volumeLabel.textContent = `${Math.round(musicVolume * 100)}%`
     if (loop) loop.checked = musicLoop
     if (fade) fade.checked = musicFade
 
     if (!url) {
-      if (sub) sub.textContent = exportPath ? 'Track linked for export. Pick again to preview.' : 'Pick a background track for this story'
       if (now) now.textContent = '00:00.0'
       if (total) total.textContent = '00:00'
       if (seek) {
@@ -1167,11 +1252,6 @@ export class ConversationScreen {
         seek.max = '0.1'
         seek.disabled = true
       }
-      if (playBtn) {
-        playBtn.textContent = '▶'
-        playBtn.disabled = true
-      }
-      if (rewindBtn) rewindBtn.disabled = true
       return
     }
 
@@ -1186,7 +1266,6 @@ export class ConversationScreen {
     const duration = Number.isFinite(audio.duration) ? audio.duration : 0.1
     const current = Number.isFinite(audio.currentTime) ? audio.currentTime : 0
     const recording = Boolean(this._audioRecorder && this._audioRecorder.state === 'recording')
-    if (sub) sub.textContent = recording ? 'Recording voice note...' : (audio.paused ? 'Ready to preview this track' : 'Previewing background music')
     if (recording) {
       const heldFor = Math.max(0, (performance.now() - this._audioRecordStart) / 1000)
       if (now) now.textContent = this._formatMusicClock(heldFor, true)
@@ -1208,19 +1287,21 @@ export class ConversationScreen {
         })
       }
     }
-    if (playBtn) {
-      playBtn.textContent = audio.paused ? '▶' : '❚❚'
-      playBtn.disabled = recording
-    }
-    if (rewindBtn) rewindBtn.disabled = recording
   }
 
   _setComposeMusicVolume(input) {
     const raw = Number(input?.value || 0)
     const volume = Math.max(0, Math.min(100, raw)) / 100.0
+    if (input) this._paintComposeVolumeSlider(input, raw)
     store.updateRenderSettings(this.projectId, { music_volume: volume })
     if (this._composeMusicAudio) this._composeMusicAudio.volume = volume
     this._syncComposeMusicTools()
+  }
+
+  _paintComposeVolumeSlider(input, rawValue) {
+    if (!input) return
+    const value = Math.max(0, Math.min(100, Number(rawValue || 0)))
+    input.style.setProperty('--vol-fill', `${value}%`)
   }
 
   _setComposeMusicFlags(patch) {
@@ -1394,13 +1475,25 @@ export class ConversationScreen {
   }
 
   async _toggleEmojiPicker() {
-    if (this._emojiPicker) {
+    if (this._emojiPicker?.isConnected) {
       this._closeEmojiPicker()
       return
     }
 
     try {
-      const picker = await createEmojiPicker({
+      if (!this._emojiPicker) {
+        this._emojiPicker = await createEmojiPicker({
+          onSelect: (char) => {
+            this._insertEmoji(char)
+            this._closeEmojiPicker()
+          },
+          onClose: () => {
+            this._closeEmojiPicker()
+          },
+        })
+      }
+
+      this._emojiPicker.setPickerHandlers?.({
         onSelect: (char) => {
           this._insertEmoji(char)
           this._closeEmojiPicker()
@@ -1410,12 +1503,12 @@ export class ConversationScreen {
         },
       })
 
-      this._emojiPicker = picker
-      picker.style.position = 'absolute'
-      picker.style.bottom = '70px'
-      picker.style.left = '8px'
-      picker.style.right = '8px'
-      this._el.appendChild(picker)
+      this._emojiPicker.style.position = 'absolute'
+      this._emojiPicker.style.bottom = '70px'
+      this._emojiPicker.style.left = '8px'
+      this._emojiPicker.style.right = '8px'
+      this._el.appendChild(this._emojiPicker)
+      this._emojiPicker.activatePicker?.()
     } catch {
       this._snack('Could not open emoji picker.')
     }
@@ -1423,9 +1516,8 @@ export class ConversationScreen {
 
   _closeEmojiPicker() {
     if (!this._emojiPicker) return
-    this._emojiPicker.destroyPicker?.()
+    this._emojiPicker.deactivatePicker?.()
     this._emojiPicker.remove()
-    this._emojiPicker = null
   }
 
   _insertEmoji(emoji) {

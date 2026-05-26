@@ -45,62 +45,63 @@ export class HomeScreen {
             <div class="scroll-body" id="characterList" style="padding-bottom:24px;"></div>
           </div>
           <div class="home-pane" data-pane="settings">
-            <div class="home-pane-title">Settings</div>
-            <div class="home-pane-sub">App preferences and support</div>
-            <div class="home-settings-list">
-              <div class="home-setting-group-label">Appearance</div>
-              <div class="home-setting-row" id="accentColorRow">
-                <div>
-                  <div class="home-setting-title">App color</div>
-                  <div class="home-setting-sub">Change the main accent color</div>
+            <div class="home-pane-sub home-pane-sub-settings">App preferences and support</div>
+            <div class="scroll-body home-settings-scroll">
+              <div class="home-settings-list">
+                <div class="home-setting-group-label">Appearance</div>
+                <div class="home-setting-row" id="accentColorRow">
+                  <div>
+                    <div class="home-setting-title">App color</div>
+                    <div class="home-setting-sub">Change the main accent color</div>
+                  </div>
+                  <input type="color" id="accentColorInput" class="home-accent-input" value="${store.getAppAccent()}" />
                 </div>
-                <input type="color" id="accentColorInput" class="home-accent-input" value="${store.getAppAccent()}" />
-              </div>
-              <div class="home-setting-group-label">Support</div>
-              <div class="home-setting-row">
-                <div>
-                  <div class="home-setting-title">Email</div>
-                  <div class="home-setting-sub">Contact support</div>
+                <div class="home-setting-group-label">Support</div>
+                <div class="home-setting-row">
+                  <div>
+                    <div class="home-setting-title">Email</div>
+                    <div class="home-setting-sub">Contact support</div>
+                  </div>
+                  <div class="home-setting-pill">Open</div>
                 </div>
-                <div class="home-setting-pill">Open</div>
-              </div>
-              <div class="home-setting-row">
-                <div>
-                  <div class="home-setting-title">TikTok</div>
-                  <div class="home-setting-sub">Follow Bubbleforge updates</div>
+                <div class="home-setting-row">
+                  <div>
+                    <div class="home-setting-title">TikTok</div>
+                    <div class="home-setting-sub">Follow Bubbleforge updates</div>
+                  </div>
+                  <div class="home-setting-pill">Open</div>
                 </div>
-                <div class="home-setting-pill">Open</div>
-              </div>
-              <div class="home-setting-row">
-                <div>
-                  <div class="home-setting-title">X / Twitter</div>
-                  <div class="home-setting-sub">Follow Bubbleforge updates</div>
+                <div class="home-setting-row">
+                  <div>
+                    <div class="home-setting-title">X / Twitter</div>
+                    <div class="home-setting-sub">Follow Bubbleforge updates</div>
+                  </div>
+                  <div class="home-setting-pill">Open</div>
                 </div>
-                <div class="home-setting-pill">Open</div>
-              </div>
-              <div class="home-setting-row">
-                <div>
-                  <div class="home-setting-title">Restore purchases</div>
-                  <div class="home-setting-sub">Request restoration support</div>
+                <div class="home-setting-row">
+                  <div>
+                    <div class="home-setting-title">Restore purchases</div>
+                    <div class="home-setting-sub">Request restoration support</div>
+                  </div>
+                  <div class="home-setting-pill">Open</div>
                 </div>
-                <div class="home-setting-pill">Open</div>
-              </div>
-              <div class="home-setting-row">
-                <div>
-                  <div class="home-setting-title">Credits & licenses</div>
-                  <div class="home-setting-sub">Assets and third-party notices</div>
+                <div class="home-setting-row">
+                  <div>
+                    <div class="home-setting-title">Credits & licenses</div>
+                    <div class="home-setting-sub">Assets and third-party notices</div>
+                  </div>
+                  <div class="home-setting-pill">Open</div>
                 </div>
-                <div class="home-setting-pill">Open</div>
-              </div>
-              <div class="home-setting-row premium">
-                <div>
-                  <div class="home-setting-title">Upgrade to PRO</div>
-                  <div class="home-setting-sub">Unlock advanced controls later</div>
+                <div class="home-setting-row premium">
+                  <div>
+                    <div class="home-setting-title">Upgrade to PRO</div>
+                    <div class="home-setting-sub">Unlock advanced controls later</div>
+                  </div>
+                  <div class="home-setting-pill">Upgrade</div>
                 </div>
-                <div class="home-setting-pill">Upgrade</div>
               </div>
+              <div class="home-settings-footer">Version 2.0.0</div>
             </div>
-            <div class="home-settings-footer">Version 2.0.0</div>
           </div>
         </div>
       </div>
@@ -627,67 +628,175 @@ export class HomeScreen {
     const project = store.getProject(projectId)
     if (!project) return
 
-    const overlay = document.createElement('div')
-    overlay.className = 'new-project-overlay'
-
-    const sheet = document.createElement('div')
-    sheet.className = 'new-project-sheet'
-    sheet.innerHTML = `
-      <div class="new-project-handle"></div>
-      <div class="new-project-title">Project actions</div>
-      <div class="new-project-sub">${project.name}</div>
-      <div class="new-project-actions" style="flex-direction:column; margin-top:14px;">
-        <button id="projectRenameBtn" class="new-project-btn ghost">Rename</button>
-        <button id="projectDeleteBtn" class="new-project-btn ghost" style="color:var(--danger);">Delete</button>
-        <button id="projectCloseBtn" class="new-project-btn primary">Done</button>
+    const host = document.getElementById('overlay-layer') || this._el
+    const wrap = document.createElement('div')
+    wrap.innerHTML = `
+      <div class="hub-overlay"></div>
+      <div class="hub-panel">
+        <div class="hub-rail">
+          <div class="hub-rail-btn active" data-project-menu-tab="rename" title="Rename">${icons.edit}</div>
+          <div class="hub-rail-btn" data-project-menu-tab="duplicate" title="Duplicate">${icons.duplicate}</div>
+          <div class="hub-rail-btn" data-project-menu-tab="delete" title="Delete">${icons.trash}</div>
+          <div style="flex:1;"></div>
+          <div class="hub-rail-btn" id="projectMenuCloseBtn">${icons.close}</div>
+        </div>
+        <div class="hub-content">
+          <div class="hub-header">
+            <div class="hub-header-title" id="projectMenuTitle"></div>
+            <div class="hub-header-sub" id="projectMenuSub"></div>
+          </div>
+          <div class="hub-body" id="projectMenuBody"></div>
+        </div>
       </div>
     `
 
+    const overlay = wrap.children[0]
+    const panel = wrap.children[1]
     this._projectMenuOverlay = overlay
-    this._projectMenuSheet = sheet
-    this._el.appendChild(overlay)
-    this._el.appendChild(sheet)
+    this._projectMenuSheet = panel
+    this._projectMenuTab = 'rename'
+    this._projectDeleteArmed = false
+    this._projectMenuHost = host
+    this._projectMenuProjectId = projectId
 
-    const close = () => this._closeProjectMenu()
-    overlay.addEventListener('click', close)
-    sheet.querySelector('#projectCloseBtn')?.addEventListener('click', close)
+    host.appendChild(overlay)
+    host.appendChild(panel)
+    if (host.id === 'overlay-layer') {
+      host.style.pointerEvents = 'all'
+    }
 
-    sheet.querySelector('#projectRenameBtn')?.addEventListener('click', () => {
-      const nextName = window.prompt('Rename story', project.name)
-      if (nextName == null) return
-      const trimmed = nextName.trim()
-      if (!trimmed) return this._snack('Story name cannot be empty.')
-      store.updateProject(projectId, { name: trimmed })
-      this._snack('Story renamed')
-      close()
+    overlay.addEventListener('click', () => this._closeProjectMenu())
+    panel.querySelector('#projectMenuCloseBtn')?.addEventListener('click', () => this._closeProjectMenu())
+    panel.querySelectorAll('[data-project-menu-tab]').forEach(btn => {
+      btn.addEventListener('click', () => this._setProjectMenuTab(btn.dataset.projectMenuTab || 'rename'))
     })
 
-    sheet.querySelector('#projectDeleteBtn')?.addEventListener('click', () => {
-      const ok = window.confirm(`Delete "${project.name}"? This cannot be undone.`)
-      if (!ok) return
-      store.deleteProject(projectId)
-      this._snack('Story deleted')
-      close()
-    })
-
+    this._setProjectMenuTab('rename')
     requestAnimationFrame(() => {
       overlay.classList.add('visible')
-      sheet.classList.add('visible')
+      panel.classList.add('visible')
     })
   }
 
   _closeProjectMenu() {
     if (!this._projectMenuOverlay || !this._projectMenuSheet) return
     const overlay = this._projectMenuOverlay
-    const sheet = this._projectMenuSheet
+    const panel = this._projectMenuSheet
+    const host = this._projectMenuHost
     overlay.classList.remove('visible')
-    sheet.classList.remove('visible')
+    panel.classList.remove('visible')
     this._projectMenuOverlay = null
     this._projectMenuSheet = null
+    this._projectMenuTab = null
+    this._projectDeleteArmed = false
+    this._projectMenuHost = null
+    this._projectMenuProjectId = null
     setTimeout(() => {
       overlay.remove()
-      sheet.remove()
-    }, 220)
+      panel.remove()
+      if (host?.id === 'overlay-layer') {
+        host.style.pointerEvents = 'none'
+      }
+    }, 320)
+  }
+
+  _setProjectMenuTab(tab) {
+    if (!this._projectMenuSheet) return
+    const projectId = this._projectMenuProjectId
+    const project = projectId ? store.getProject(projectId) : null
+    if (!project) return
+
+    this._projectMenuTab = tab
+    if (tab !== 'delete') {
+      this._projectDeleteArmed = false
+    }
+    this._projectMenuSheet.querySelectorAll('[data-project-menu-tab]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.projectMenuTab === tab)
+    })
+
+    const title = this._projectMenuSheet.querySelector('#projectMenuTitle')
+    const sub = this._projectMenuSheet.querySelector('#projectMenuSub')
+    const body = this._projectMenuSheet.querySelector('#projectMenuBody')
+    if (!title || !sub || !body) return
+
+    if (tab === 'rename') {
+      title.textContent = 'Rename Project'
+      sub.textContent = project.name || 'Project'
+      body.innerHTML = `
+        <div class="hub-config-stack">
+          <div class="hub-settings-card">
+            <div class="form-field" style="margin:0;">
+              <label>Project name</label>
+              <input id="projectRenameInput" type="text" value="${this._escAttr(project.name)}" maxlength="80" />
+            </div>
+            <button class="new-project-btn primary" id="projectRenameSave" style="margin-top:10px; width:100%;">Save</button>
+          </div>
+        </div>`
+      body.querySelector('#projectRenameSave')?.addEventListener('click', () => {
+        const next = body.querySelector('#projectRenameInput')?.value.trim() || ''
+        if (!next) return this._snack('Story name cannot be empty.')
+        store.updateProject(projectId, { name: next })
+        this._snack('Story renamed')
+        this._closeProjectMenu()
+      })
+      return
+    }
+
+    if (tab === 'duplicate') {
+      title.textContent = 'Duplicate Project'
+      sub.textContent = `${project.scenes?.length || 0} scenes`
+      body.innerHTML = `
+        <div class="hub-config-stack">
+          <div class="hub-settings-card">
+            <div class="hub-list-title">Create a full copy</div>
+            <div class="hub-list-sub" style="margin-top:6px;">Duplicates scenes, actors, messages, and settings.</div>
+            <button class="new-project-btn primary" id="projectDuplicateRun" style="margin-top:12px; width:100%;">Duplicate</button>
+            <button class="new-project-btn ghost" id="projectDuplicatePovRun" style="margin-top:10px; width:100%; display:flex; align-items:center; justify-content:center; gap:8px;">${icons.duplicate} Duplicate POV</button>
+          </div>
+        </div>`
+      body.querySelector('#projectDuplicateRun')?.addEventListener('click', () => {
+        const copy = store.duplicateProject(projectId)
+        if (!copy) return
+        this._snack('Story duplicated')
+        this._closeProjectMenu()
+      })
+      body.querySelector('#projectDuplicatePovRun')?.addEventListener('click', () => {
+        const nextProject = store.getProject(projectId)
+        const activeScene = store.getActiveScene(projectId) || nextProject?.scenes?.[0]
+        if (!activeScene?.id) return
+        this._closeProjectMenu()
+        push('project', { projectId })
+        queueMicrotask(() => {
+          push('conversation', { projectId, sceneId: activeScene.id })
+        })
+      })
+      return
+    }
+
+    title.textContent = 'Delete Project'
+    sub.textContent = project.name || 'Project'
+    const armed = this._projectDeleteArmed === true
+    body.innerHTML = `
+      <div class="hub-config-stack">
+        <div class="hub-settings-card">
+          <div class="danger-zone-title">DANGER ZONE</div>
+          <div class="hub-list-sub" style="margin-top:8px;">This will permanently wipe this entire project, including its saved file. This cannot be undone.</div>
+          <button class="danger-trash-trigger ${armed ? 'armed' : ''}" id="projectDeleteRun" aria-label="Delete project">
+            ${icons.trash}
+          </button>
+          <div class="danger-zone-note ${armed ? 'armed' : ''}">${armed ? 'FINAL WARNING: Tap trash again now to permanently wipe this project.' : 'Tap the trash button twice to confirm permanent deletion.'}</div>
+        </div>
+      </div>`
+    body.querySelector('#projectDeleteRun')?.addEventListener('click', () => {
+      if (!this._projectDeleteArmed) {
+        this._projectDeleteArmed = true
+        this._setProjectMenuTab('delete')
+        return
+      }
+      store.deleteProject(projectId)
+      this._snack('Story deleted')
+      this._closeProjectMenu()
+    })
   }
 
   _coverGradient(colors) {

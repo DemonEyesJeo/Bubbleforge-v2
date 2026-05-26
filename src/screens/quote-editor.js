@@ -46,7 +46,7 @@ export class QuoteEditorScreen {
     el.className = 'quote-editor-screen'
     el.innerHTML = `
       <div class="nav-bar">
-        <div class="nav-back" id="quoteBackBtn">${icons.back} Stories</div>
+        <div class="nav-back" id="quoteBackBtn">${icons.back} Scenes</div>
         <div class="nav-center">
           <div class="nav-title" id="quoteNavTitle">Post</div>
           <div class="nav-sub" id="quoteNavSub"></div>

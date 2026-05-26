@@ -80,25 +80,60 @@ def _wrap_text(draw: ImageDraw.ImageDraw, text: str, font, max_width: int) -> li
     return lines
 
 
-def _render_pdf_pages(proj: Project, size: Tuple[int, int]) -> list[Image.Image]:
+def _script_render_options(rs: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        'style': str(rs.get('script_style') or 'screenplay').strip().lower(),
+        'font_size': _safe_int(rs.get('script_font_size', 14), 14),
+        'bold_names': bool(rs.get('script_bold_names', True)),
+        'page_numbers': bool(rs.get('script_page_numbers', rs.get('script_page_number', True))),
+        'paper_effect': bool(rs.get('script_paper_effect', False)),
+    }
+
+
+def _render_pdf_pages(proj: Project, size: Tuple[int, int], script_opts: Dict[str, Any] | None = None) -> list[Image.Image]:
+    opts = dict(script_opts or {})
+    style = str(opts.get('style') or 'screenplay').lower()
+    font_size = max(10, min(24, _safe_int(opts.get('font_size', 14), 14)))
+    bold_names = bool(opts.get('bold_names', True))
+    page_numbers = bool(opts.get('page_numbers', True))
+    paper_effect = bool(opts.get('paper_effect', False))
+
     width, height = size
-    title_font = _load_font(max(28, width // 28), bold=True)
-    name_font = _load_font(max(18, width // 54), bold=True)
-    body_font = _load_font(max(20, width // 60), bold=False)
-    small_font = _load_font(max(14, width // 72), bold=False)
+    title_font = _load_font(max(24, font_size + 10), bold=True)
+    name_font = _load_font(max(14, font_size + 2), bold=bold_names)
+    body_font = _load_font(max(14, font_size + (0 if style == 'condensed' else 2)), bold=False)
+    small_font = _load_font(max(11, font_size - 1), bold=False)
     messages = list(getattr(proj, "messages", []) or [])
 
-    pages: list[Image.Image] = []
-    page = Image.new("RGB", (width, height), color=(12, 12, 12))
-    draw = ImageDraw.Draw(page)
-    draw.text((56, 48), proj.title, fill=(245, 245, 247), font=title_font)
-    draw.text((56, 96), f"{len(messages)} message{'s' if len(messages) != 1 else ''}", fill=(170, 170, 180), font=small_font)
+    if style == 'condensed':
+        max_text_ratio = 0.64
+        bubble_gap = 38
+        page_top = 138
+    elif style == 'reduced':
+        max_text_ratio = 0.60
+        bubble_gap = 44
+        page_top = 144
+    else:
+        max_text_ratio = 0.56
+        bubble_gap = 52
+        page_top = 150
 
-    y = 150
+    bg_color = (245, 241, 231) if paper_effect else (12, 12, 12)
+    title_color = (38, 38, 42) if paper_effect else (245, 245, 247)
+    meta_color = (95, 95, 104) if paper_effect else (170, 170, 180)
+    default_text_color = (36, 36, 40) if paper_effect else (230, 230, 235)
+
+    pages: list[Image.Image] = []
+    page = Image.new("RGB", (width, height), color=bg_color)
+    draw = ImageDraw.Draw(page)
+    draw.text((56, 48), proj.title, fill=title_color, font=title_font)
+    draw.text((56, 96), f"{len(messages)} message{'s' if len(messages) != 1 else ''}", fill=meta_color, font=small_font)
+
+    y = page_top
     line_height = draw.textbbox((0, 0), "Ag", font=body_font)[3] - draw.textbbox((0, 0), "Ag", font=body_font)[1]
 
     if not messages:
-        draw.text((56, 150), "No messages to export.", fill=(170, 170, 180), font=body_font)
+        draw.text((56, page_top), "No messages to export.", fill=meta_color, font=body_font)
         return [page]
 
     for index, msg in enumerate(messages):
@@ -108,19 +143,19 @@ def _render_pdf_pages(proj: Project, size: Tuple[int, int]) -> list[Image.Image]
         side_right = bool(actor and actor.side == "right")
         bubble_color = actor.bubble_hex if actor else ("#2979FF" if side_right else "#2A2A2E")
         rgb = tuple(int(bubble_color.lstrip("#")[i:i+2], 16) for i in (0, 2, 4))
-        text_color = (255, 255, 255) if side_right else (230, 230, 235)
-        max_text_width = int(width * 0.56)
+        text_color = (255, 255, 255) if side_right else default_text_color
+        max_text_width = int(width * max_text_ratio)
         text_lines = _wrap_text(draw, str(msg_text), body_font, max_text_width)
-        bubble_h = max(70, 28 + line_height * len(text_lines))
+        bubble_h = max(64, 24 + line_height * len(text_lines))
         bubble_w = min(max_text_width + 36, width - 112)
 
         if y + bubble_h + 72 > height and index > 0:
             pages.append(page)
-            page = Image.new("RGB", (width, height), color=(12, 12, 12))
+            page = Image.new("RGB", (width, height), color=bg_color)
             draw = ImageDraw.Draw(page)
-            draw.text((56, 48), proj.title, fill=(245, 245, 247), font=title_font)
-            draw.text((56, 96), f"{len(messages)} message{'s' if len(messages) != 1 else ''}", fill=(170, 170, 180), font=small_font)
-            y = 150
+            draw.text((56, 48), proj.title, fill=title_color, font=title_font)
+            draw.text((56, 96), f"{len(messages)} message{'s' if len(messages) != 1 else ''}", fill=meta_color, font=small_font)
+            y = page_top
             line_height = draw.textbbox((0, 0), "Ag", font=body_font)[3] - draw.textbbox((0, 0), "Ag", font=body_font)[1]
 
         x = width - bubble_w - 56 if side_right else 56
@@ -130,22 +165,126 @@ def _render_pdf_pages(proj: Project, size: Tuple[int, int]) -> list[Image.Image]
             draw.text((x + 18, text_y), line, fill=text_color, font=body_font)
             text_y += line_height + 4
         if actor:
-            draw.text((x, y + bubble_h + 8), actor.name, fill=(145, 145, 155), font=name_font)
-        y += bubble_h + 52
+            draw.text((x, y + bubble_h + 8), actor.name, fill=meta_color, font=name_font)
+        y += bubble_h + bubble_gap
+
+    pages.append(page)
+    if page_numbers:
+        total = len(pages)
+        for idx, pg in enumerate(pages, start=1):
+            d = ImageDraw.Draw(pg)
+            d.text((width - 96, height - 34), f"{idx}/{total}", fill=meta_color, font=small_font)
+    return pages
+
+
+def _render_script_pages(proj: Project, size: Tuple[int, int], script_opts: Dict[str, Any] | None = None) -> list[Image.Image]:
+    opts = dict(script_opts or {})
+    style = str(opts.get('style') or 'screenplay').strip().lower()
+    font_size = max(10, min(24, _safe_int(opts.get('font_size', 14), 14)))
+    bold_names = bool(opts.get('bold_names', True))
+    page_numbers = bool(opts.get('page_numbers', True))
+    paper_effect = bool(opts.get('paper_effect', False))
+
+    width, height = size
+    bg_color = (246, 241, 231) if paper_effect else (252, 252, 252)
+    ink = (27, 27, 30)
+    meta = (90, 90, 98)
+
+    if style == 'condensed':
+        margin_x = int(width * 0.07)
+        top_pad = int(height * 0.08)
+        line_gap = 2
+        name_gap = 6
+        between_msgs = 8
+        dialogue_x = int(width * 0.17)
+        dialogue_w = int(width * 0.66)
+    elif style == 'reduced':
+        margin_x = int(width * 0.08)
+        top_pad = int(height * 0.085)
+        line_gap = 3
+        name_gap = 7
+        between_msgs = 10
+        dialogue_x = int(width * 0.20)
+        dialogue_w = int(width * 0.60)
+    else:
+        margin_x = int(width * 0.11)
+        top_pad = int(height * 0.09)
+        line_gap = 4
+        name_gap = 8
+        between_msgs = 12
+        dialogue_x = int(width * 0.25)
+        dialogue_w = int(width * 0.50)
+
+    name_font = _load_font(max(12, font_size + 1), bold=bold_names)
+    body_font = _load_font(max(12, font_size), bold=False)
+    title_font = _load_font(max(16, font_size + 6), bold=True)
+    small_font = _load_font(max(10, font_size - 2), bold=False)
+
+    messages = list(getattr(proj, 'messages', []) or [])
+    pages: list[Image.Image] = []
+
+    def _new_page(page_index: int) -> tuple[Image.Image, ImageDraw.ImageDraw, int]:
+        page = Image.new('RGB', (width, height), color=bg_color)
+        draw = ImageDraw.Draw(page)
+        if paper_effect:
+            for y in range(0, height, 4):
+                tint = 246 - (y % 8)
+                draw.line((0, y, width, y), fill=(tint, tint - 1, tint - 4), width=1)
+        draw.text((margin_x, int(top_pad * 0.52)), str(proj.title or 'UNTITLED').upper(), fill=ink, font=title_font)
+        draw.text((margin_x, int(top_pad * 0.52) + 32), f"{len(messages)} lines", fill=meta, font=small_font)
+        y = top_pad + 56
+        if page_numbers:
+            page_no = str(page_index)
+            w = draw.textbbox((0, 0), page_no, font=small_font)[2]
+            draw.text((width - margin_x - w, int(top_pad * 0.52)), page_no, fill=meta, font=small_font)
+        return page, draw, y
+
+    page, draw, y = _new_page(1)
+    if not messages:
+        draw.text((margin_x, y), 'No dialogue in active scene.', fill=meta, font=body_font)
+        return [page]
+
+    for msg in messages:
+        speaker = str(getattr(msg, 'speaker', '') or 'CHARACTER').strip().upper()
+        text = str(getattr(msg, 'text', '') or '').strip()
+        if not text:
+            continue
+        lines = _wrap_text(draw, text, body_font, dialogue_w)
+        name_h = draw.textbbox((0, 0), 'A', font=name_font)[3]
+        body_h = draw.textbbox((0, 0), 'Ag', font=body_font)[3]
+        block_h = name_h + name_gap + (len(lines) * body_h) + (max(0, len(lines) - 1) * line_gap) + between_msgs
+
+        if y + block_h > height - int(top_pad * 0.6):
+            pages.append(page)
+            page, draw, y = _new_page(len(pages) + 1)
+
+        if style == 'screenplay':
+            name_w = draw.textbbox((0, 0), speaker, font=name_font)[2]
+            name_x = max(margin_x, (width // 2) - (name_w // 2))
+        else:
+            name_x = dialogue_x + 8
+
+        draw.text((name_x, y), speaker, fill=ink, font=name_font)
+        ty = y + name_h + name_gap
+        for line in lines:
+            draw.text((dialogue_x, ty), line, fill=ink, font=body_font)
+            ty += body_h + line_gap
+        y = ty + between_msgs
 
     pages.append(page)
     return pages
 
 
-def _export_pdf(proj: Project, out_path: Path, size: Tuple[int, int]) -> None:
-    pages = _render_pdf_pages(proj, size)
+def _export_pdf(proj: Project, out_path: Path, size: Tuple[int, int], script_opts: Dict[str, Any] | None = None, script_mode: bool = False) -> None:
+    pages = _render_script_pages(proj, size, script_opts) if script_mode else _render_pdf_pages(proj, size, script_opts)
     first, *rest = pages
     first.save(out_path, save_all=True, append_images=rest)
 
 
-def _export_png_sequence(proj: Project, out_dir: Path, size: Tuple[int, int]) -> None:
+def _export_png_sequence(proj: Project, out_dir: Path, size: Tuple[int, int], script_opts: Dict[str, Any] | None = None, script_mode: bool = False) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
-    for index, page in enumerate(_render_pdf_pages(proj, size), start=1):
+    renderer = _render_script_pages if script_mode else _render_pdf_pages
+    for index, page in enumerate(renderer(proj, size, script_opts), start=1):
         page.save(out_dir / f"scene_{index:02d}.png")
 
 
@@ -154,7 +293,27 @@ def _zip_png_sequence(out_dir: Path) -> Path:
     return archive_path
 
 
-def _project_from_frontend(payload: Dict[str, Any]) -> Tuple[Project, Tuple[int, int], str]:
+def _normalize_format(value: Any) -> str:
+    raw = str(value or '').strip().lower()
+    aliases = {
+        'script_pdf': 'pdf',
+        'script_png': 'png',
+        'script_jpg': 'jpg',
+        'script_jpeg': 'jpg',
+        'script_webp': 'webp',
+        'jpeg': 'jpg',
+    }
+    return aliases.get(raw, raw or 'mp4')
+
+
+def _script_paper_to_size(paper: str) -> Tuple[int, int]:
+    norm = str(paper or 'a4').strip().lower()
+    if norm == 'letter':
+        return (1275, 1650)
+    return (1240, 1754)
+
+
+def _project_from_frontend(payload: Dict[str, Any], requested_format: str | None = None) -> Tuple[Project, Tuple[int, int], str]:
     proj = Project()
     proj.title = str(payload.get("name") or "Untitled Story")
 
@@ -200,8 +359,13 @@ def _project_from_frontend(payload: Dict[str, Any]) -> Tuple[Project, Tuple[int,
     proj.settings.sfx_type = str(rs.get("sfx_type") or "soft").strip().lower() or "soft"
     proj.settings.keyboard_style = str(rs.get("keyboard_style") or "ios").strip().lower() or "ios"
 
-    fmt = str(rs.get("format") or "mp4").strip().lower()
-    out_size = _resolution_to_size(str(rs.get("resolution") or "1080p"))
+    req_raw = str(requested_format or '').strip().lower()
+    fmt = _normalize_format(req_raw or rs.get("format") or "mp4")
+    script_mode = req_raw.startswith('script_')
+    if script_mode and fmt in {'pdf', 'png', 'jpg', 'webp'}:
+        out_size = _script_paper_to_size(str(rs.get('script_paper') or 'a4'))
+    else:
+        out_size = _resolution_to_size(str(rs.get("resolution") or "1080p"))
     return proj, out_size, fmt
 
 
@@ -281,11 +445,18 @@ def export():
     if not project:
         return jsonify({'error': 'No project data'}), 400
 
+    requested_format = str(data.get('format')).strip().lower() if data.get('format') is not None else None
+
     job_id = str(uuid.uuid4())
-    jobs[job_id] = {'status': 'queued', 'progress': 0, 'created_at': time.time()}
+    jobs[job_id] = {
+        'status': 'queued',
+        'progress': 0,
+        'created_at': time.time(),
+        'requested_format': _normalize_format(requested_format) if requested_format else None,
+    }
     cancel_events[job_id] = threading.Event()
 
-    thread = threading.Thread(target=_run_export, args=(job_id, project), daemon=True)
+    thread = threading.Thread(target=_run_export, args=(job_id, project, requested_format), daemon=True)
     thread.start()
 
     return jsonify({'job_id': job_id, 'status': 'queued'})
@@ -315,7 +486,7 @@ def export_cancel(job_id):
         jobs[job_id]['status'] = 'cancelling'
     return jsonify({'job_id': job_id, 'status': jobs[job_id]['status']})
 
-def _run_export(job_id, project):
+def _run_export(job_id, project, requested_format=None):
     cancel_event = cancel_events.get(job_id)
     try:
         jobs[job_id]['status'] = 'running'
@@ -325,13 +496,16 @@ def _run_export(job_id, project):
             jobs[job_id]['status'] = 'canceled'
             return
 
-        proj, out_size, fmt = _project_from_frontend(project)
+        proj, out_size, fmt = _project_from_frontend(project, requested_format)
+        script_mode = str(requested_format or '').strip().lower().startswith('script_')
         if not proj.messages:
             raise ValueError('No messages to export in active scene')
 
         out_dir = Path(__file__).resolve().parent / 'exports'
         out_dir.mkdir(parents=True, exist_ok=True)
         rs_in = dict(project.get('render_settings') or {})
+
+        script_opts = _script_render_options(rs_in)
 
         if fmt == 'mp4':
             out_path = out_dir / f'bubbleforge_{job_id}.mp4'
@@ -369,7 +543,7 @@ def _run_export(job_id, project):
                 return
             out_path = out_dir / f'bubbleforge_{job_id}.pdf'
             jobs[job_id]['progress'] = 35
-            _export_pdf(proj, out_path, out_size)
+            _export_pdf(proj, out_path, out_size, script_opts, script_mode=script_mode)
             jobs[job_id]['output_type'] = 'pdf'
         elif fmt == 'png_sequence':
             if cancel_event is not None and cancel_event.is_set():
@@ -377,7 +551,7 @@ def _run_export(job_id, project):
                 return
             out_path = out_dir / f'bubbleforge_{job_id}_png'
             jobs[job_id]['progress'] = 35
-            _export_png_sequence(proj, out_path, out_size)
+            _export_png_sequence(proj, out_path, out_size, script_opts, script_mode=script_mode)
             frame_count = len(list(out_path.glob('*.png')))
             jobs[job_id]['frame_count'] = frame_count
             jobs[job_id]['progress'] = 80
@@ -386,6 +560,23 @@ def _run_export(job_id, project):
             jobs[job_id]['output_type'] = 'png_sequence'
             jobs[job_id]['output_archive_path'] = str(zip_path)
             jobs[job_id]['output_archive_url'] = f"/api/exports/{zip_path.name}"
+        elif fmt in {'png', 'jpg', 'webp'}:
+            if cancel_event is not None and cancel_event.is_set():
+                jobs[job_id]['status'] = 'canceled'
+                return
+            ext = 'jpg' if fmt == 'jpg' else fmt
+            out_path = out_dir / f'bubbleforge_{job_id}.{ext}'
+            jobs[job_id]['progress'] = 35
+            page_renderer = _render_script_pages if script_mode else _render_pdf_pages
+            page = page_renderer(proj, out_size, script_opts)[0]
+            if fmt == 'jpg':
+                page.convert('RGB').save(out_path, format='JPEG', quality=95)
+            elif fmt == 'webp':
+                page.convert('RGB').save(out_path, format='WEBP', quality=95)
+            else:
+                page.save(out_path, format='PNG')
+            jobs[job_id]['progress'] = 90
+            jobs[job_id]['output_type'] = fmt
         else:
             raise ValueError(f"Format '{fmt}' is not supported yet")
 

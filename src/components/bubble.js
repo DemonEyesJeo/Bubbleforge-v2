@@ -64,11 +64,9 @@ export function renderMessages(messages, actors, opts = {}) {
       const tsEl = showTimestamps
         ? `<div class="bubble-meta">${formatMessageTime(msg.ts)}</div>`
         : ''
-      const reactions = Array.isArray(msg.reactions)
-        ? msg.reactions
-        : (msg.reaction ? [msg.reaction] : [])
+      const reaction = getPrimaryReaction(msg)
       const statusHtml = isRight && msg.status
-        ? `<div class="bubble-status">${msg.status === 'seen' ? `<span style="color:var(--accent)">✓✓</span>` : msg.status === 'delivered' ? '<span>✓✓</span>' : '<span>✓</span>'}</div>`
+        ? `<div class="bubble-status">${msg.status === 'seen' ? `<span style="color:#3FA6FF">✓✓</span>` : msg.status === 'delivered' ? '<span style="color:#3FA6FF">✓✓</span>' : '<span style="color:#3FA6FF">✓</span>'}</div>`
         : ''
       const leftHandle = (!isRight && !hideControls)
         ? `<div class="msg-handle-left"><div class="msg-drag-handle" data-msg-id="${msg.id}" title="Hold to reorder">≡</div></div>`
@@ -107,7 +105,7 @@ export function renderMessages(messages, actors, opts = {}) {
                     ${textValue ? `<div class="bubble-text">${escHtml(textValue)}</div>` : ''}
                 </div>
                 ${statusHtml}
-                ${reactions.length ? `<div class="bubble-reactions">${reactions.map(r => `<span class="reaction-pill">${escHtml(r)}</span>`).join('')}</div>` : ''}
+                ${reaction ? `<div class="bubble-reactions"><span class="reaction-pill">${renderReaction(reaction)}</span></div>` : ''}
                 ${tsEl}
               </div>
             </div>
@@ -174,4 +172,25 @@ function formatMessageTime(ts) {
   const ampm = hours >= 12 ? 'PM' : 'AM'
   const hour12 = hours % 12 || 12
   return `${hour12}:${mins} ${ampm}`
+}
+
+function getPrimaryReaction(msg) {
+  if (typeof msg?.reaction === 'string' && msg.reaction.trim()) return msg.reaction
+  if (Array.isArray(msg?.reactions) && msg.reactions.length) return String(msg.reactions[0] || '')
+  return ''
+}
+
+function renderReaction(emoji) {
+  const hex = emojiToOpenMojiHex(emoji)
+  if (!hex) return escHtml(emoji)
+  return `<img class="reaction-pill-img" src="/openmoji/svg/${hex}.svg" alt="${escAttr(emoji)}" loading="lazy" />`
+}
+
+function emojiToOpenMojiHex(emoji) {
+  if (!emoji) return ''
+  return Array.from(String(emoji))
+    .map(ch => ch.codePointAt(0))
+    .filter(cp => Number.isFinite(cp) && cp !== 0xFE0F)
+    .map(cp => cp.toString(16).toUpperCase())
+    .join('-')
 }
